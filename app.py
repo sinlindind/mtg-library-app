@@ -48,7 +48,7 @@ if query:
                 img_url = None
 
             if img_url:
-                st.image(img_url, use_column_width=True)
+                st.image(img_url, use_container_width=True)
 
         with col2:
             st.subheader(card.get("name"))
