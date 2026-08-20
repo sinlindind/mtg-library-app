@@ -7,7 +7,6 @@ st.title("MTG Printing Visual Grid Explorer")
 
 HEADERS = {"User-Agent": "MyMTGDataEntryApp/1.0", "Accept": "*/*"}
 
-# Initialize session state for the selected card detail view
 if "selected_card" not in st.session_state:
     st.session_state.selected_card = None
 
@@ -24,10 +23,16 @@ def fetch_all_printings(card_name):
     return []
 
 
-# --- SEARCH BAR ---
-search_col, _ = st.columns([2, 1])
+# --- SEARCH BAR & CONTROLS ---
+search_col, per_page_col = st.columns([3, 1])
 with search_col:
     card_input = st.text_input("Enter exact card name:", value="Sol Ring")
+
+with per_page_col:
+    # Feature 2: Dropdown to control items per page
+    cards_per_page = st.selectbox(
+        "Cards per page:", options=[12, 24, 48, 96], index=0
+    )
 
 if card_input:
     printings = fetch_all_printings(card_input)
@@ -35,17 +40,22 @@ if card_input:
     if not printings:
         st.warning(f"No printings found for '{card_input}'.")
     else:
-        # --- DETAIL MODAL / PANEL ---
+        # --- DETAIL PANEL ---
         if st.session_state.selected_card:
             card = st.session_state.selected_card
             st.divider()
 
             detail_col1, detail_col2 = st.columns([1, 2])
             with detail_col1:
-                img_url = card.get("image_uris", {}).get("normal") or (
-                    card["card_faces"][0]["image_uris"]["normal"]
-                    if "card_faces" in card
-                    else None
+                # Feature 1 Fix: Use high-res 'large' or 'normal' images
+                img_url = (
+                    card.get("image_uris", {}).get("large")
+                    or card.get("image_uris", {}).get("normal")
+                    or (
+                        card["card_faces"][0]["image_uris"]["large"]
+                        if "card_faces" in card
+                        else None
+                    )
                 )
                 if img_url:
                     st.image(img_url, use_container_width=True)
@@ -75,11 +85,10 @@ if card_input:
             st.divider()
 
         # --- PAGINATION LOGIC ---
-        CARDS_PER_PAGE = 8
         total_cards = len(printings)
-        total_pages = math.ceil(total_cards / CARDS_PER_PAGE)
+        total_pages = math.ceil(total_cards / cards_per_page)
 
-        pag_col1, pag_col2, pag_col3 = st.columns([2, 2, 4])
+        pag_col1, pag_col2 = st.columns([2, 5])
         with pag_col1:
             page = st.number_input(
                 f"Page (1 of {total_pages})",
@@ -89,8 +98,8 @@ if card_input:
                 step=1,
             )
 
-        start_idx = (page - 1) * CARDS_PER_PAGE
-        end_idx = start_idx + CARDS_PER_PAGE
+        start_idx = (page - 1) * cards_per_page
+        end_idx = start_idx + cards_per_page
         page_cards = printings[start_idx:end_idx]
 
         st.caption(
@@ -105,11 +114,15 @@ if card_input:
 
             for idx, item in enumerate(row_cards):
                 with cols[idx]:
-                    # Determine Image URL
-                    img_url = item.get("image_uris", {}).get("small") or (
-                        item["card_faces"][0]["image_uris"]["small"]
-                        if "card_faces" in item
-                        else None
+                    # Feature 1 Fix: Use 'normal' instead of 'small' for clear grid rendering
+                    img_url = (
+                        item.get("image_uris", {}).get("normal")
+                        or item.get("image_uris", {}).get("small")
+                        or (
+                            item["card_faces"][0]["image_uris"]["normal"]
+                            if "card_faces" in item
+                            else None
+                        )
                     )
 
                     if img_url:
@@ -120,7 +133,6 @@ if card_input:
                         f"Set: {item.get('set').upper()} | #{item.get('collector_number')}"
                     )
 
-                    # Unique button key based on set code and collector number
                     btn_key = f"select_{item.get('set')}_{item.get('collector_number')}_{item.get('id')}"
                     if st.button("Inspect", key=btn_key):
                         st.session_state.selected_card = item
