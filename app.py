@@ -134,6 +134,6 @@ if card_input:
                     )
 
                     btn_key = f"select_{item.get('set')}_{item.get('collector_number')}_{item.get('id')}"
-                    if st.button("Inspect", key=btn_key):
+                    if st.button("View Detail", key=btn_key):
                         st.session_state.selected_card = item
                         st.rerun()
