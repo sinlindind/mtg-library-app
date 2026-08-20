@@ -1,72 +1,64 @@
 import requests
 import streamlit as st
 
-st.set_page_config(page_title="Scryfall Explorer", layout="wide")
-st.title("Scryfall Card API Inspector")
+st.set_page_config(page_title="Scryfall Prints Explorer", layout="wide")
+st.title("Scryfall Printings Inspector")
 
-# Scryfall requires a custom User-Agent header
 HEADERS = {"User-Agent": "MyMTGDataEntryApp/1.0", "Accept": "*/*"}
 
 
 @st.cache_data(ttl=3600)
-def search_scryfall(query):
+def fetch_all_printings(card_name):
+    """Fetches all unique prints/sets for an exact card name."""
     url = "https://api.scryfall.com/cards/search"
-    response = requests.get(url, params={"q": query}, headers=HEADERS)
+    # exact name search + unique=prints disables rollup
+    params = {"q": f'!"{card_name}"', "unique": "prints"}
+    response = requests.get(url, params=params, headers=HEADERS)
+
     if response.status_code == 200:
         return response.json().get("data", [])
     return []
 
 
-# Search Input
-query = st.text_input("Search for a card name:", value="Sol Ring")
+card_input = st.text_input("Enter exact card name:", value="Sol Ring")
 
-if query:
-    cards = search_scryfall(query)
+if card_input:
+    printings = fetch_all_printings(card_input)
 
-    if not cards:
-        st.warning("No cards found.")
+    if not printings:
+        st.warning(f"No printings found for '{card_input}'.")
     else:
-        # Selectbox to choose card printing
-        card_options = {
-            f"{c['name']} [{c.get('set', '').upper()}]": c for c in cards
-        }
-        selected_label = st.selectbox(
-            "Select version:", list(card_options.keys())
-        )
-        card_data = card_options[selected_label]
+        st.success(f"Found {len(printings)} printings across different sets!")
 
-        # Display Card Image on Left
+        # Create dropdown options using Set Name and Collector Number
+        printing_options = {
+            f"{p.get('set_name')} ({p.get('set').upper()}) #{p.get('collector_number')}": p
+            for p in printings
+        }
+
+        selected_label = st.selectbox(
+            "Select specific set release:", list(printing_options.keys())
+        )
+        selected_card = printing_options[selected_label]
+
         col1, col2 = st.columns([1, 2])
 
         with col1:
-            if "image_uris" in card_data:
+            if "image_uris" in selected_card:
                 st.image(
-                    card_data["image_uris"].get("normal"),
-                    use_container_width=True,
-                )
-            elif (
-                "card_faces" in card_data
-                and "image_uris" in card_data["card_faces"][0]
-            ):
-                st.image(
-                    card_data["card_faces"][0]["image_uris"].get("normal"),
+                    selected_card["image_uris"].get("normal"),
                     use_container_width=True,
                 )
 
-        # Display Raw Key/Value Data on Right
         with col2:
-            st.subheader(f"Raw API Response for '{card_data.get('name')}'")
+            st.subheader(
+                f"{selected_card.get('name')} — {selected_card.get('set_name')}"
+            )
+            st.write(f"**Set Code:** {selected_card.get('set').upper()}")
+            st.write(f"**Released:** {selected_card.get('released_at')}")
+            st.write(
+                f"**USD Price:** ${selected_card.get('prices', {}).get('usd', 'N/A')}"
+            )
 
-            # Option 1: Formatted Interactive JSON tree
-            with st.expander("Expand interactive JSON view", expanded=False):
-                st.json(card_data)
-
-            # Option 2: Key-Value Table
-            st.write("### Key / Value Pairs")
-            formatted_data = []
-            for key, value in card_data.items():
-                formatted_data.append(
-                    {"Key": key, "Type": type(value).__name__, "Value": str(value)}
-                )
-
-            st.dataframe(formatted_data, use_container_width=True, height=500)
+            with st.expander("View Full Raw JSON for this Set Version"):
+                st.json(selected_card)
