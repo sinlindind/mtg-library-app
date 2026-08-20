@@ -1,17 +1,21 @@
+import math
 import requests
 import streamlit as st
 
-st.set_page_config(page_title="Scryfall Prints Explorer", layout="wide")
-st.title("Scryfall Printings Inspector")
+st.set_page_config(page_title="Scryfall Grid Explorer", layout="wide")
+st.title("MTG Printing Visual Grid Explorer")
 
 HEADERS = {"User-Agent": "MyMTGDataEntryApp/1.0", "Accept": "*/*"}
+
+# Initialize session state for the selected card detail view
+if "selected_card" not in st.session_state:
+    st.session_state.selected_card = None
 
 
 @st.cache_data(ttl=3600)
 def fetch_all_printings(card_name):
     """Fetches all unique prints/sets for an exact card name."""
     url = "https://api.scryfall.com/cards/search"
-    # exact name search + unique=prints disables rollup
     params = {"q": f'!"{card_name}"', "unique": "prints"}
     response = requests.get(url, params=params, headers=HEADERS)
 
@@ -20,7 +24,10 @@ def fetch_all_printings(card_name):
     return []
 
 
-card_input = st.text_input("Enter exact card name:", value="Sol Ring")
+# --- SEARCH BAR ---
+search_col, _ = st.columns([2, 1])
+with search_col:
+    card_input = st.text_input("Enter exact card name:", value="Sol Ring")
 
 if card_input:
     printings = fetch_all_printings(card_input)
@@ -28,37 +35,93 @@ if card_input:
     if not printings:
         st.warning(f"No printings found for '{card_input}'.")
     else:
-        st.success(f"Found {len(printings)} printings across different sets!")
+        # --- DETAIL MODAL / PANEL ---
+        if st.session_state.selected_card:
+            card = st.session_state.selected_card
+            st.divider()
 
-        # Create dropdown options using Set Name and Collector Number
-        printing_options = {
-            f"{p.get('set_name')} ({p.get('set').upper()}) #{p.get('collector_number')}": p
-            for p in printings
-        }
+            detail_col1, detail_col2 = st.columns([1, 2])
+            with detail_col1:
+                img_url = card.get("image_uris", {}).get("normal") or (
+                    card["card_faces"][0]["image_uris"]["normal"]
+                    if "card_faces" in card
+                    else None
+                )
+                if img_url:
+                    st.image(img_url, use_container_width=True)
 
-        selected_label = st.selectbox(
-            "Select specific set release:", list(printing_options.keys())
-        )
-        selected_card = printing_options[selected_label]
+            with detail_col2:
+                st.subheader(f"{card.get('name')} [{card.get('set').upper()}]")
+                st.write(f"**Set Name:** {card.get('set_name')}")
+                st.write(
+                    f"**Collector Number:** #{card.get('collector_number')}"
+                )
+                st.write(f"**Released:** {card.get('released_at')}")
+                st.write(f"**Rarity:** {card.get('rarity').title()}")
 
-        col1, col2 = st.columns([1, 2])
-
-        with col1:
-            if "image_uris" in selected_card:
-                st.image(
-                    selected_card["image_uris"].get("normal"),
-                    use_container_width=True,
+                prices = card.get("prices", {})
+                st.write(f"**USD Price:** ${prices.get('usd') or 'N/A'}")
+                st.write(
+                    f"**Foil Price:** ${prices.get('usd_foil') or 'N/A'}"
                 )
 
-        with col2:
-            st.subheader(
-                f"{selected_card.get('name')} — {selected_card.get('set_name')}"
-            )
-            st.write(f"**Set Code:** {selected_card.get('set').upper()}")
-            st.write(f"**Released:** {selected_card.get('released_at')}")
-            st.write(
-                f"**USD Price:** ${selected_card.get('prices', {}).get('usd', 'N/A')}"
+                if st.button("Close Details"):
+                    st.session_state.selected_card = None
+                    st.rerun()
+
+                with st.expander("View Full Raw JSON"):
+                    st.json(card)
+
+            st.divider()
+
+        # --- PAGINATION LOGIC ---
+        CARDS_PER_PAGE = 8
+        total_cards = len(printings)
+        total_pages = math.ceil(total_cards / CARDS_PER_PAGE)
+
+        pag_col1, pag_col2, pag_col3 = st.columns([2, 2, 4])
+        with pag_col1:
+            page = st.number_input(
+                f"Page (1 of {total_pages})",
+                min_value=1,
+                max_value=max(1, total_pages),
+                value=1,
+                step=1,
             )
 
-            with st.expander("View Full Raw JSON for this Set Version"):
-                st.json(selected_card)
+        start_idx = (page - 1) * CARDS_PER_PAGE
+        end_idx = start_idx + CARDS_PER_PAGE
+        page_cards = printings[start_idx:end_idx]
+
+        st.caption(
+            f"Showing {start_idx + 1}-{min(end_idx, total_cards)} of {total_cards} printings"
+        )
+
+        # --- GRID DISPLAY (4 Columns per Row) ---
+        GRID_COLUMNS = 4
+        for i in range(0, len(page_cards), GRID_COLUMNS):
+            cols = st.columns(GRID_COLUMNS)
+            row_cards = page_cards[i : i + GRID_COLUMNS]
+
+            for idx, item in enumerate(row_cards):
+                with cols[idx]:
+                    # Determine Image URL
+                    img_url = item.get("image_uris", {}).get("small") or (
+                        item["card_faces"][0]["image_uris"]["small"]
+                        if "card_faces" in item
+                        else None
+                    )
+
+                    if img_url:
+                        st.image(img_url, use_container_width=True)
+
+                    st.markdown(f"**{item.get('set_name')}**")
+                    st.caption(
+                        f"Set: {item.get('set').upper()} | #{item.get('collector_number')}"
+                    )
+
+                    # Unique button key based on set code and collector number
+                    btn_key = f"select_{item.get('set')}_{item.get('collector_number')}_{item.get('id')}"
+                    if st.button("Inspect", key=btn_key):
+                        st.session_state.selected_card = item
+                        st.rerun()
