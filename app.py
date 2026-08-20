@@ -57,15 +57,10 @@ def show_card_details(card):
         st.rerun()
 
 
-# --- SEARCH BAR & CONTROLS ---
-search_col, per_page_col = st.columns([3, 1])
+# --- SEARCH BAR ---
+search_col, _ = st.columns([3, 1])
 with search_col:
     card_input = st.text_input("Enter exact card name:", value="Sol Ring")
-
-with per_page_col:
-    cards_per_page = st.selectbox(
-        "Cards per page:", options=[12, 24, 48, 96], index=0
-    )
 
 if card_input:
     printings = fetch_all_printings(card_input)
@@ -73,26 +68,37 @@ if card_input:
     if not printings:
         st.warning(f"No printings found for '{card_input}'.")
     else:
-        # --- PAGINATION LOGIC ---
-        total_cards = len(printings)
-        total_pages = math.ceil(total_cards / cards_per_page)
+        # --- PAGINATION & PER PAGE CONTROLS (SIDE BY SIDE) ---
+        pag_col1, pag_col2, _ = st.columns([2, 2, 4])
 
-        pag_col1, pag_col2 = st.columns([2, 5])
+        # Temporary total calculation for upper bounds
+        temp_per_page = 12
+        temp_total_pages = math.ceil(len(printings) / temp_per_page)
+
         with pag_col1:
             page = st.number_input(
-                f"Page (1 of {total_pages})",
+                "Page:",
                 min_value=1,
-                max_value=max(1, total_pages),
+                max_value=max(1, temp_total_pages),
                 value=1,
                 step=1,
             )
+
+        with pag_col2:
+            cards_per_page = st.selectbox(
+                "Cards per page:", options=[12, 24, 48, 96], index=0
+            )
+
+        # Recalculate true totals based on user's selectbox choice
+        total_cards = len(printings)
+        total_pages = math.ceil(total_cards / cards_per_page)
 
         start_idx = (page - 1) * cards_per_page
         end_idx = start_idx + cards_per_page
         page_cards = printings[start_idx:end_idx]
 
         st.caption(
-            f"Showing {start_idx + 1}-{min(end_idx, total_cards)} of {total_cards} printings"
+            f"Page {page} of {total_pages} | Showing {start_idx + 1}-{min(end_idx, total_cards)} of {total_cards} printings"
         )
 
         # --- GRID DISPLAY ---
@@ -122,6 +128,5 @@ if card_input:
                     )
 
                     btn_key = f"select_{item.get('set')}_{item.get('collector_number')}_{item.get('id')}"
-                    # Button text updated to 'View Details'
                     if st.button("View Details", key=btn_key):
                         show_card_details(item)
