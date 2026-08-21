@@ -11,27 +11,30 @@ st.set_page_config(
     initial_sidebar_state="collapsed" if "user" not in st.session_state or st.session_state.user is None else "expanded"
 )
 
-# 1. Initialize Session State
+# 1. Dialog Modal to display Image and Full Scryfall JSON Payload
+@st.dialog("Card Details", width="large")
+def show_card_details(card: dict):
+    img_url = get_card_image_url(card, size="large")
+    
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.image(img_url, use_container_width=True)
+    with col2:
+        st.subheader(card.get("name", "Card Details"))
+        st.caption(f"**Set:** {card.get('set_name', '')} (`{card.get('set', '').upper()}`)")
+    
+    st.divider()
+    st.subheader("Full Scryfall API Payload")
+    st.json(card)  # Renders the full raw payload cleanly
+
+# 2. Initialize Session State
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# 2. Handle Verification Link in URL
-query_params = st.query_params
-if "verify_token" in query_params:
-    token = query_params["verify_token"]
-    verified_email = verify_token(token)
-    if verified_email:
-        verify_user_email(verified_email)
-        st.success("Your email has been successfully verified! You can now log in.")
-    else:
-        st.error("Invalid or expired verification link.")
-    st.query_params.clear()
-
 # ==========================================
-# UNAUTHENTICATED VIEW (Clean Centered Screen)
+# UNAUTHENTICATED VIEW
 # ==========================================
 if st.session_state.user is None:
-    # CSS snippet to completely hide sidebar and toggle controls on initial screen
     st.markdown("""
         <style>
             [data-testid="stSidebar"] {display: none;}
@@ -44,13 +47,11 @@ if st.session_state.user is None:
         st.title("🃏 MTG Library App")
         tab_login, tab_register = st.tabs(["Login", "Register"])
 
-        # LOGIN TAB
         with tab_login:
             st.subheader("Login to your account")
             login_username = st.text_input("Username", key="login_user")
             login_password = st.text_input("Password", type="password", key="login_pass")
-            
-            if st.button("Login", use_container_width=True):
+            if st.button("Login", width="stretch"):
                 user_record = get_user_by_username(login_username)
                 if user_record:
                     stored_hash, stored_salt = user_record["password_hash"].split(":")
@@ -62,14 +63,12 @@ if st.session_state.user is None:
                 else:
                     st.error("Invalid username or password.")
 
-        # REGISTER TAB
         with tab_register:
             st.subheader("Create a new account")
             reg_username = st.text_input("Username", key="reg_user")
             reg_email = st.text_input("Email Address", key="reg_email")
             reg_password = st.text_input("Password", type="password", key="reg_pass")
-            
-            if st.button("Register", use_container_width=True):
+            if st.button("Register", width="stretch"):
                 if not reg_username or not reg_email or not reg_password:
                     st.warning("Please fill in all fields.")
                 elif get_user_by_username(reg_username):
@@ -81,36 +80,34 @@ if st.session_state.user is None:
                     token = generate_verification_token(reg_email)
                     create_user(reg_username, reg_email, pwd_hash, salt, token)
                     st.success("Account created successfully!")
-                    st.info(f"Verification token generated: `{token}`")
 
 # ==========================================
-# AUTHENTICATED VIEW (Search & Collection)
+# AUTHENTICATED VIEW
 # ==========================================
 else:
     user = st.session_state.user
 
-    # Sidebar Navigation Menu
+    st.markdown("""
+        <style>
+            [data-testid="stSidebarNav"] {display: none;}
+        </style>
+    """, unsafe_allow_html=True)
+
     with st.sidebar:
         st.title(f"👤 {user['username']}")
-        
-        # Default menu view is 'Search'
-        menu_selection = st.radio(
-            "Navigation", 
-            options=["Search", "My Collection"],
-            index=0
-        )
+        menu_selection = st.radio("Navigation", options=["Search", "My Collection"], index=0)
         st.divider()
-        if st.button("Logout", use_container_width=True):
+        if st.button("Logout", width="stretch"):
             st.session_state.user = None
             st.rerun()
 
-    # --- SCREEN 1: SEARCH (Default) ---
+    # --- SEARCH SCREEN ---
     if menu_selection == "Search":
         st.title("🔍 MTG Card Search")
         
         search_query = st.text_input(
             "Search Scryfall", 
-            placeholder="Enter card name or syntax (e.g. 'Sol Ring' or '!'Sol Ring'')"
+            placeholder="Enter card name or syntax (e.g. 'Sol Ring')"
         )
 
         if search_query:
@@ -120,24 +117,23 @@ else:
             if not results:
                 st.warning("No cards found matching your query.")
             else:
-                st.success(f"Found **{len(results)} versions/printings")
+                st.success(f"Found **{len(results)}** printings")
                 
-                # 4-Column Grid
                 cols = st.columns(4)
-                
                 for idx, card in enumerate(results):
                     col = cols[idx % 4]
                     
                     with col:
-                        # Card Artwork
                         img_url = get_card_image_url(card, size="large")
+                        
+                        # Display card image
                         st.image(img_url, use_container_width=True)
                         
-                        # 1. Set Name
+                        # Set Name
                         set_name = card.get("set_name", "Unknown Set")
                         st.caption(f"Set: {set_name}")
                         
-                        # 2. Extract Prices & Escaped Dollar Signs (\$)
+                        # Pricing
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
                         usd_foil = prices.get("usd_foil")
@@ -148,38 +144,15 @@ else:
                         if usd_foil:
                             price_parts.append(f"Foil: \\${usd_foil}")
                             
-                        price_line = " | ".join(price_parts) if price_parts else "No pricing available"
-                        
-                        # 3. Clean Price Display
+                        price_line = " \\| ".join(price_parts) if price_parts else "No pricing available"
                         st.caption(price_line)
                         
-                        # View Details Popover
-                        with st.popover("View Details", use_container_width=True):
-                            set_code = card.get("set", "").upper()
-                            cn = card.get("collector_number", "")
-                            
-                            st.subheader(f"{card['name']} ({set_code} #{cn})")
-                            st.write(f"**Type:** {card.get('type_line', 'N/A')}")
-                            st.write(f"**Mana Cost:** {card.get('mana_cost', 'N/A')}")
-                            st.divider()
-                            
-                            oracle_text = card.get("oracle_text")
-                            if not oracle_text and "card_faces" in card:
-                                oracle_text = "\n\n---\n\n".join(
-                                    f"**{face.get('name')}**\n{face.get('oracle_text', '')}"
-                                    for face in card["card_faces"]
-                                )
-                            
-                            st.markdown(f"**Oracle Text:**\n\n{oracle_text or 'No card text.'}")
-                            
-                            if "flavor_text" in card:
-                                st.caption(f"_{card['flavor_text']}_")
-                                
-                            st.write(f"**Artist:** {card.get('artist', 'Unknown')}")
+                        # Clickable Trigger (Replaces 'View Details' button)
+                        if st.button("🔎 View Payload", key=f"card_btn_{card['id']}_{idx}", width="stretch"):
+                            show_card_details(card)
 
                         st.divider()
 
-    # --- SCREEN 2: MY COLLECTION ---
     elif menu_selection == "My Collection":
         st.title("📦 My Collection")
-        st.info("Your collection functionality will display here.")
+        st.info("Your collection inventory view will display here.")
