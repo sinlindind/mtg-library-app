@@ -133,34 +133,30 @@ else:
                         img_url = get_card_image_url(card, size="large")
                         st.image(img_url, use_container_width=True)
                         
-                        # Card Title & Specific Set / Collector Number
-                        st.markdown(f"**")
-                        
+                        # 1. Extract Set Name
                         set_name = card.get("set_name", "Unknown Set")
-                        set_code = card.get("set", "").upper()
-                        cn = card.get("collector_number", "")
-                        rarity = card.get("rarity", "").capitalize()
                         
-                        st.caption(f"**Set:** {set_name} (`{set_code}`) #{cn}\n\n*{rarity}*")
-                        
-                        # Price Display per printing
+                        # 2. Extract Prices
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
                         usd_foil = prices.get("usd_foil")
                         
-                        price_str = []
+                        price_parts = []
                         if usd:
-                            price_str.append(f"Reg: **${usd}**")
+                            price_parts.append(f"Reg: ${usd}")
                         if usd_foil:
-                            price_str.append(f"Foil: **${usd_foil}**")
+                            price_parts.append(f"Foil: ${usd_foil}")
+                            
+                        price_text = " | ".join(price_parts) if price_parts else "No pricing available"
                         
-                        if price_str:
-                            st.caption(" | ".join(price_str))
-                        else:
-                            st.caption("*No pricing available*")
+                        # 3. Clean Single Caption (Set Name + Prices)
+                        st.caption(f"{set_name}\n\n{price_text}")
                         
                         # View Details Popover
                         with st.popover("View Details", use_container_width=True):
+                            set_code = card.get("set", "").upper()
+                            cn = card.get("collector_number", "")
+                            
                             st.subheader(f"{card['name']} ({set_code} #{cn})")
                             st.write(f"**Type:** {card.get('type_line', 'N/A')}")
                             st.write(f"**Mana Cost:** {card.get('mana_cost', 'N/A')}")
