@@ -31,10 +31,23 @@ def show_card_details(card: dict):
 if "user" not in st.session_state:
     st.session_state.user = None
 
+# 3. Handle Verification Link in URL
+query_params = st.query_params
+if "verify_token" in query_params:
+    token = query_params["verify_token"]
+    verified_email = verify_token(token)
+    if verified_email:
+        verify_user_email(verified_email)
+        st.success("Your email has been successfully verified! You can now log in.")
+    else:
+        st.error("Invalid or expired verification link.")
+    st.query_params.clear()
+
 # ==========================================
-# UNAUTHENTICATED VIEW
+# UNAUTHENTICATED VIEW (Login / Register)
 # ==========================================
 if st.session_state.user is None:
+    # Hide sidebar and collapse controls on login view
     st.markdown("""
         <style>
             [data-testid="stSidebar"] {display: none;}
@@ -47,11 +60,15 @@ if st.session_state.user is None:
         st.title("🃏 MTG Library App")
         tab_login, tab_register = st.tabs(["Login", "Register"])
 
+        # LOGIN TAB
         with tab_login:
             st.subheader("Login to your account")
-            login_username = st.text_input("Username", key="login_user")
-            login_password = st.text_input("Password", type="password", key="login_pass")
-            if st.button("Login", width="stretch"):
+            with st.form("login_form", clear_on_submit=False):
+                login_username = st.text_input("Username", key="login_user")
+                login_password = st.text_input("Password", type="password", key="login_pass")
+                login_submitted = st.form_submit_button("Login", use_container_width=True)
+            
+            if login_submitted:
                 user_record = get_user_by_username(login_username)
                 if user_record:
                     stored_hash, stored_salt = user_record["password_hash"].split(":")
@@ -63,12 +80,16 @@ if st.session_state.user is None:
                 else:
                     st.error("Invalid username or password.")
 
+        # REGISTER TAB
         with tab_register:
             st.subheader("Create a new account")
-            reg_username = st.text_input("Username", key="reg_user")
-            reg_email = st.text_input("Email Address", key="reg_email")
-            reg_password = st.text_input("Password", type="password", key="reg_pass")
-            if st.button("Register", width="stretch"):
+            with st.form("register_form", clear_on_submit=False):
+                reg_username = st.text_input("Username", key="reg_user")
+                reg_email = st.text_input("Email Address", key="reg_email")
+                reg_password = st.text_input("Password", type="password", key="reg_pass")
+                reg_submitted = st.form_submit_button("Register", use_container_width=True)
+            
+            if reg_submitted:
                 if not reg_username or not reg_email or not reg_password:
                     st.warning("Please fill in all fields.")
                 elif get_user_by_username(reg_username):
@@ -80,28 +101,31 @@ if st.session_state.user is None:
                     token = generate_verification_token(reg_email)
                     create_user(reg_username, reg_email, pwd_hash, salt, token)
                     st.success("Account created successfully!")
+                    st.info(f"Verification token generated: `{token}`")
 
 # ==========================================
-# AUTHENTICATED VIEW
+# AUTHENTICATED VIEW (Search & Collection)
 # ==========================================
 else:
     user = st.session_state.user
 
+    # Hide automatic page navigation list above username
     st.markdown("""
         <style>
             [data-testid="stSidebarNav"] {display: none;}
         </style>
     """, unsafe_allow_html=True)
 
+    # Sidebar Navigation
     with st.sidebar:
         st.title(f"👤 {user['username']}")
         menu_selection = st.radio("Navigation", options=["Search", "My Collection"], index=0)
         st.divider()
-        if st.button("Logout", width="stretch"):
+        if st.button("Logout", use_container_width=True):
             st.session_state.user = None
             st.rerun()
 
-    # --- SEARCH SCREEN ---
+    # --- SCREEN 1: SEARCH (Default) ---
     if menu_selection == "Search":
         st.title("🔍 MTG Card Search")
         
@@ -119,6 +143,7 @@ else:
             else:
                 st.success(f"Found **{len(results)}** printings")
                 
+                # 4-Column Grid
                 cols = st.columns(4)
                 for idx, card in enumerate(results):
                     col = cols[idx % 4]
@@ -126,14 +151,19 @@ else:
                     with col:
                         img_url = get_card_image_url(card, size="large")
                         
-                        # Display card image
-                        st.image(img_url, use_container_width=True)
+                        # Clickable Image Trigger
+                        if st.button(
+                            label=f"![{card['name']}]({img_url})", 
+                            key=f"img_click_{card['id']}_{idx}", 
+                            use_container_width=True
+                        ):
+                            show_card_details(card)
                         
                         # Set Name
                         set_name = card.get("set_name", "Unknown Set")
                         st.caption(f"Set: {set_name}")
                         
-                        # Pricing
+                        # Pricing (Escaped \$ and \| to prevent LaTeX/formatting glitches)
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
                         usd_foil = prices.get("usd_foil")
@@ -146,13 +176,10 @@ else:
                             
                         price_line = " \\| ".join(price_parts) if price_parts else "No pricing available"
                         st.caption(price_line)
-                        
-                        # Clickable Trigger (Replaces 'View Details' button)
-                        if st.button("🔎 View Payload", key=f"card_btn_{card['id']}_{idx}", width="stretch"):
-                            show_card_details(card)
 
                         st.divider()
 
+    # --- SCREEN 2: MY COLLECTION ---
     elif menu_selection == "My Collection":
         st.title("📦 My Collection")
         st.info("Your collection inventory view will display here.")
