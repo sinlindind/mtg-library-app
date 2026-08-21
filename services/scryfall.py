@@ -53,10 +53,22 @@ def get_card_image_url(card: dict, size: str = "large") -> str:
             
     return "https://errors.scryfall.com/unknown.jpg"
 
+@st.cache_data(ttl=3600)
 def get_card_by_id(scryfall_id: str) -> dict:
     """Fetches full card JSON payload from Scryfall by its ID."""
+    if not scryfall_id:
+        return {}
+        
     url = f"https://api.scryfall.com/cards/{scryfall_id}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.json()
-    return {}
+    headers = {
+        "User-Agent": "MTGLibraryApp/1.0",
+        "Accept": "application/json"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        return {}
+    except requests.exceptions.RequestException:
+        return {}
