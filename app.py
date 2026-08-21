@@ -138,7 +138,7 @@ else:
                         set_code = card.get("set", "").upper()
                         cn = card.get("collector_number", "")
                         
-                        st.caption(f"**Set:** {set_name} (`{set_code}`)")
+                        st.caption(f"**Set:** {set_name}")
                         
                         # Price Display per printing
                         prices = card.get("prices", {})
