@@ -220,7 +220,7 @@ else:
 
     # --- SCREEN 2: MY LIBRARY ---
     elif menu_selection == "My Library":
-        st.title("📦 My Master Library")
+        st.title("📦 My Library")
         
         library_cards = get_user_library(user["id"])
         if not library_cards:
