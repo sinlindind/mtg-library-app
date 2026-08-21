@@ -152,7 +152,7 @@ else:
                     # COLUMN 1: Image
                     with col_img:
                         img_url = get_card_image_url(card, size="large")
-                        st.image(img_url, use_container_width=True)
+                        st.image(img_url, width='stretch')
                     
                     # COLUMN 2: Details
                     with col_info:
@@ -195,7 +195,7 @@ else:
                             key=f"row_cond_{card_id}"
                         )
                         
-                        if st.button("➕ Add to Library", key=f"row_add_{card_id}", use_container_width=True):
+                        if st.button("➕ Add to Library", key=f"row_add_{card_id}", width='stretch'):
                             if qty_reg == 0 and qty_foil == 0:
                                 st.warning("Enter a quantity greater than 0.")
                             else:
