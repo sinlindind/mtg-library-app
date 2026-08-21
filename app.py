@@ -109,12 +109,12 @@ else:
         st.title("🔍 MTG Card Search")
         
         search_query = st.text_input(
-            "Search", 
+            "Search Scryfall", 
             placeholder="Enter card name or syntax (e.g. 'Sol Ring' or '!'Sol Ring'')"
         )
 
         if search_query:
-            with st.spinner("Searching..."):
+            with st.spinner("Searching Scryfall..."):
                 results = search_cards(search_query)
             
             if not results:
@@ -134,11 +134,14 @@ else:
                         st.image(img_url, use_container_width=True)
                         
                         # Card Title & Specific Set / Collector Number
+                        st.markdown(f"**")
+                        
                         set_name = card.get("set_name", "Unknown Set")
                         set_code = card.get("set", "").upper()
                         cn = card.get("collector_number", "")
+                        rarity = card.get("rarity", "").capitalize()
                         
-                        st.caption(f"**Set:** {set_name}")
+                        st.caption(f"**Set:** {set_name} (`{set_code}`) #{cn}\n\n*{rarity}*")
                         
                         # Price Display per printing
                         prices = card.get("prices", {})
@@ -147,9 +150,9 @@ else:
                         
                         price_str = []
                         if usd:
-                            price_str.append(f"Reg: **${usd}** ")
+                            price_str.append(f"Reg: **${usd}**")
                         if usd_foil:
-                            price_str.append(f"Foil: **${usd_foil}** ")
+                            price_str.append(f"Foil: **${usd_foil}**")
                         
                         if price_str:
                             st.caption(" | ".join(price_str))
