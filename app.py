@@ -147,10 +147,10 @@ else:
                         if usd_foil:
                             price_parts.append(f"Foil: ${usd_foil}")
                             
-                        price_text = "  ".join(price_parts) if price_parts else "No pricing available"
+                        price_text = " | ".join(price_parts) if price_parts else "No pricing available"
                         
                         # 3. Clean Single Caption (Set Name + Prices)
-                        st.caption(f"{set_name}\n\n{price_text}")
+                        st.caption(f"Set: {set_name}\n{price_text}")
                         
                         # View Details Popover
                         with st.popover("View Details", use_container_width=True):
