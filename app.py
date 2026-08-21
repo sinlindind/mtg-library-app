@@ -150,73 +150,82 @@ else:
                 st.success(f"Found **{len(results)}** printings")
                 
                 # 4-Column Grid
-                cols = st.columns(4)
-                for idx, card in enumerate(results):
-                    col = cols[idx % 4]
-                    card_id = f"{card['id']}_{idx}"
-                    
-                    # Initialize counter state keys
-                    if f"{card_id}_reg" not in st.session_state:
-                        st.session_state[f"{card_id}_reg"] = 0
-                    if f"{card_id}_foil" not in st.session_state:
-                        st.session_state[f"{card_id}_foil"] = 0
+cols = st.columns(4)
+for idx, card in enumerate(results):
+    col = cols[idx % 4]
+    card_id = f"{card['id']}_{idx}"
+    
+    with col:
+        img_url = get_card_image_url(card, size="large")
+        
+        # 1. High-Resolution Artwork
+        st.image(img_url, width='stretch')
+        
+        # 2. Card Metadata Captions
+        set_name = card.get("set_name", "Unknown Set")
+        st.caption(f"Set: {set_name}")
+        
+        prices = card.get("prices", {})
+        usd = prices.get("usd")
+        usd_foil = prices.get("usd_foil")
+        
+        price_parts = []
+        if usd:
+            price_parts.append(f"Reg: \\${usd}")
+        if usd_foil:
+            price_parts.append(f"Foil: \\${usd_foil}")
+            
+        price_line = " \\| ".join(price_parts) if price_parts else "No pricing available"
+        st.caption(price_line)
+        
+        # 3. Details Button
+        if st.button("🔍 Details", key=f"details_btn_{card_id}", width='stretch'):
+            show_card_details(card)
 
-                    with col:
-                        img_url = get_card_image_url(card, size="large")
-                        
-                        # 1. High-Resolution Card Artwork
-                        st.image(img_url, width='stretch')
-                        
-                        # 2. Set Name Caption
-                        set_name = card.get("set_name", "Unknown Set")
-                        st.caption(f"Set: {set_name}")
-                        
-                        # 3. Pricing Caption
-                        prices = card.get("prices", {})
-                        usd = prices.get("usd")
-                        usd_foil = prices.get("usd_foil")
-                        
-                        price_parts = []
-                        if usd:
-                            price_parts.append(f"Reg: \\${usd}")
-                        if usd_foil:
-                            price_parts.append(f"Foil: \\${usd_foil}")
-                            
-                        price_line = " \\| ".join(price_parts) if price_parts else "No pricing available"
-                        st.caption(price_line)
-                        
-                        # 4. Details Button (Renamed from Payload)
-                        if st.button("🔍 Details", key=f"details_btn_{card_id}", width='stretch'):
-                            show_card_details(card)
+        # 4. Clean Popover for Adding to Library
+        with st.popover("📦 Add to Library", width='stretch'):
+            st.subheader("Add Quantities")
+            
+            # Compact inputs inside the popup
+            col_reg, col_foil = st.columns(2)
+            with col_reg:
+                qty_reg = st.number_input("Regular Qty", min_value=0, value=0, step=1, key=f"pop_reg_{card_id}")
+            with col_foil:
+                qty_foil = st.number_input("Foil Qty", min_value=0, value=0, step=1, key=f"pop_foil_{card_id}")
+            
+            condition = st.selectbox(
+                "Condition", 
+                options=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
+                key=f"pop_cond_{card_id}"
+            )
+            
+            if st.button("Confirm Add", key=f"pop_confirm_{card_id}", width='stretch'):
+                if qty_reg == 0 and qty_foil == 0:
+                    st.warning("Please enter a quantity greater than 0.")
+                else:
+                    # Add Regular Copies
+                    if qty_reg > 0:
+                        add_card_to_library(
+                            user_id=user["id"],
+                            scryfall_id=card["id"],
+                            finish="nonfoil",
+                            quantity=qty_reg,
+                            condition=condition,
+                            purchase_price=float(usd) if usd else None
+                        )
+                    # Add Foil Copies
+                    if qty_foil > 0:
+                        add_card_to_library(
+                            user_id=user["id"],
+                            scryfall_id=card["id"],
+                            finish="foil",
+                            quantity=qty_foil,
+                            condition=condition,
+                            purchase_price=float(usd_foil) if usd_foil else None
+                        )
+                    st.success("Library updated!")
 
-                        st.write("") # Line spacing
-
-                        # 5. Regular Quantity Selector Row (+ / -)
-                        col_lbl_r, col_minus_r, col_val_r, col_plus_r = st.columns([2, 1, 1, 1])
-                        with col_lbl_r:
-                            st.markdown("**Regular:**")
-                        with col_minus_r:
-                            st.button("➖", key=f"minus_reg_{card_id}", on_click=adjust_quantity, args=(card_id, "reg", -1), width='stretch')
-                        with col_val_r:
-                            st.markdown(f"<h4 style='text-align: center; margin: 0;'>{st.session_state[f'{card_id}_reg']}</h4>", unsafe_allow_html=True)
-                        with col_plus_r:
-                            st.button("➕", key=f"plus_reg_{card_id}", on_click=adjust_quantity, args=(card_id, "reg", 1), width='stretch')
-
-                        # Line Feed between Reg and Foil
-                        st.write("")
-
-                        # 6. Foil Quantity Selector Row (+ / -)
-                        col_lbl_f, col_minus_f, col_val_f, col_plus_f = st.columns([2, 1, 1, 1])
-                        with col_lbl_f:
-                            st.markdown("**Foil:**")
-                        with col_minus_f:
-                            st.button("➖", key=f"minus_foil_{card_id}", on_click=adjust_quantity, args=(card_id, "foil", -1), width='stretch')
-                        with col_val_f:
-                            st.markdown(f"<h4 style='text-align: center; margin: 0;'>{st.session_state[f'{card_id}_foil']}</h4>", unsafe_allow_html=True)
-                        with col_plus_f:
-                            st.button("➕", key=f"plus_foil_{card_id}", on_click=adjust_quantity, args=(card_id, "foil", 1), width='stretch')
-
-                        st.divider()
+        st.divider()
 
     # --- SCREEN 2: MY LIBRARY ---
     elif menu_selection == "My Library":
