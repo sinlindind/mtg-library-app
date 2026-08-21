@@ -176,9 +176,17 @@ else:
                         st.markdown(f"**Regular Price:** ${usd if usd else 'N/A'}")
                         st.markdown(f"**Foil Price:** ${usd_foil if usd_foil else 'N/A'}")
                         
-                        # Display Current Collection Quantity
-                        st.markdown("---")
-                        st.markdown(f"**In Library:** {owned_reg} Regular | {owned_foil} Foil")
+                        # Display Detailed Collection Ownership
+                        valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
+                        
+                        if valid_owned:
+                            st.markdown("---")
+                            st.markdown("**In Library:**")
+                            for item in valid_owned:
+                                qty = item.get("quantity")
+                                finish = item.get("finish", "nonfoil").capitalize()
+                                cond = item.get("condition", "Near Mint")
+                                st.markdown(f"• **{qty}x** {finish} ({cond})")
                     
                     # COLUMN 3: Add to Library Controls
                     with col_actions:
