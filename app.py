@@ -147,9 +147,9 @@ else:
                         
                         price_str = []
                         if usd:
-                            price_str.append(f"Reg: **${usd}**")
+                            price_str.append(f"Reg: ${usd}")
                         if usd_foil:
-                            price_str.append(f"Foil: **${usd_foil}**")
+                            price_str.append(f"Foil: ${usd_foil}")
                         
                         if price_str:
                             st.caption(" | ".join(price_str))
