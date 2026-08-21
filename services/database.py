@@ -38,9 +38,9 @@ def get_user_by_email(email: str):
     return response.data[0] if response.data else None
 
 
-def verify_user_login(username: str):
-    """Helper to fetch a user record for password verification."""
-    return get_user_by_username(username)
+def verify_user_email(email: str):
+    """Checks if an email exists and returns the user record."""
+    return get_user_by_email(email)
 
 
 # ==========================================
