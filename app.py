@@ -14,6 +14,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed" if "user" not in st.session_state or st.session_state.user is None else "expanded"
 )
 
+# Helper function to mutate card quantities safely in session_state
+def adjust_quantity(card_id: str, field: str, amount: int):
+    key = f"{card_id}_{field}"
+    current_val = st.session_state.get(key, 0)
+    st.session_state[key] = max(0, current_val + amount)
+
 # 1. Dialog Modal to display Image and Full Scryfall JSON Payload
 @st.dialog("Card Details", width="large")
 def show_card_details(card: dict):
@@ -147,7 +153,14 @@ else:
                 cols = st.columns(4)
                 for idx, card in enumerate(results):
                     col = cols[idx % 4]
+                    card_id = f"{card['id']}_{idx}"
                     
+                    # Initialize counter state keys
+                    if f"{card_id}_reg" not in st.session_state:
+                        st.session_state[f"{card_id}_reg"] = 0
+                    if f"{card_id}_foil" not in st.session_state:
+                        st.session_state[f"{card_id}_foil"] = 0
+
                     with col:
                         img_url = get_card_image_url(card, size="large")
                         
@@ -172,51 +185,36 @@ else:
                         price_line = " \\| ".join(price_parts) if price_parts else "No pricing available"
                         st.caption(price_line)
                         
-                        # 4. Action Buttons
-                        btn_col1, btn_col2 = st.columns(2)
-                        
-                        with btn_col1:
-                            if st.button("🔎 Payload", key=f"payload_btn_{card['id']}_{idx}", width='stretch'):
-                                show_card_details(card)
-                                
-                        with btn_col2:
-                            with st.popover("➕ Library", width='stretch'):
-                                st.markdown(f"**Add {card['name']}**")
-                                
-                                finish = st.selectbox(
-                                    "Finish", 
-                                    options=["nonfoil", "foil", "etched"], 
-                                    key=f"finish_{card['id']}_{idx}"
-                                )
-                                quantity = st.number_input(
-                                    "Quantity", 
-                                    min_value=1, 
-                                    value=1, 
-                                    key=f"qty_{card['id']}_{idx}"
-                                )
-                                condition = st.selectbox(
-                                    "Condition", 
-                                    options=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
-                                    key=f"cond_{card['id']}_{idx}"
-                                )
-                                price_paid = st.number_input(
-                                    "Purchase Price ($)", 
-                                    min_value=0.0, 
-                                    value=float(usd) if (usd and finish == "nonfoil") else (float(usd_foil) if usd_foil else 0.0),
-                                    step=0.25,
-                                    key=f"price_{card['id']}_{idx}"
-                                )
-                                
-                                if st.button("Confirm Add", key=f"confirm_add_{card['id']}_{idx}", width='stretch'):
-                                    add_card_to_library(
-                                        user_id=user["id"],
-                                        scryfall_id=card["id"],
-                                        finish=finish,
-                                        quantity=quantity,
-                                        condition=condition,
-                                        purchase_price=price_paid if price_paid > 0 else None
-                                    )
-                                    st.success("Added to Library!")
+                        # 4. Details Button (Renamed from Payload)
+                        if st.button("🔍 Details", key=f"details_btn_{card_id}", width='stretch'):
+                            show_card_details(card)
+
+                        st.write("") # Line spacing
+
+                        # 5. Regular Quantity Selector Row (+ / -)
+                        col_lbl_r, col_minus_r, col_val_r, col_plus_r = st.columns([2, 1, 1, 1])
+                        with col_lbl_r:
+                            st.markdown("**Regular:**")
+                        with col_minus_r:
+                            st.button("➖", key=f"minus_reg_{card_id}", on_click=adjust_quantity, args=(card_id, "reg", -1), width='stretch')
+                        with col_val_r:
+                            st.markdown(f"<h4 style='text-align: center; margin: 0;'>{st.session_state[f'{card_id}_reg']}</h4>", unsafe_allow_html=True)
+                        with col_plus_r:
+                            st.button("➕", key=f"plus_reg_{card_id}", on_click=adjust_quantity, args=(card_id, "reg", 1), width='stretch')
+
+                        # Line Feed between Reg and Foil
+                        st.write("")
+
+                        # 6. Foil Quantity Selector Row (+ / -)
+                        col_lbl_f, col_minus_f, col_val_f, col_plus_f = st.columns([2, 1, 1, 1])
+                        with col_lbl_f:
+                            st.markdown("**Foil:**")
+                        with col_minus_f:
+                            st.button("➖", key=f"minus_foil_{card_id}", on_click=adjust_quantity, args=(card_id, "foil", -1), width='stretch')
+                        with col_val_f:
+                            st.markdown(f"<h4 style='text-align: center; margin: 0;'>{st.session_state[f'{card_id}_foil']}</h4>", unsafe_allow_html=True)
+                        with col_plus_f:
+                            st.button("➕", key=f"plus_foil_{card_id}", on_click=adjust_quantity, args=(card_id, "foil", 1), width='stretch')
 
                         st.divider()
 
