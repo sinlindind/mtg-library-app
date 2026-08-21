@@ -3,4 +3,3 @@ pandas
 requests
 gspread
 google-auth
-streamlit-gsheets

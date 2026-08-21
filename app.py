@@ -1,16 +1,30 @@
 import hashlib
 import math
+import gspread
+from google.oauth2.service_account import Credentials
 import pandas as pd
 import requests
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="MTG Library Manager", layout="wide")
 
 HEADERS = {"User-Agent": "MyMTGDataEntryApp/1.0", "Accept": "*/*"}
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
 
-# --- GOOGLE SHEETS CONNECTION ---
-conn = st.connection("gsheets", type=GSheetsConnection)
+
+# --- DIRECT GSPREAD CONNECTION ---
+def get_gsheet_worksheet(worksheet_name: str):
+    """Establishes connection to Google Sheets using st.secrets and gspread."""
+    creds_dict = st.secrets["connections"]["gsheets"]
+    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    client = gspread.authorize(creds)
+
+    sheet_url = creds_dict["spreadsheet"]
+    sh = client.open_by_url(sheet_url)
+    return sh.worksheet(worksheet_name)
 
 
 def hash_password(password: str) -> str:
@@ -20,10 +34,16 @@ def hash_password(password: str) -> str:
 
 def load_users() -> pd.DataFrame:
     """Reads the Users worksheet from Google Sheets."""
-    df = conn.read(worksheet="Users", ttl=0)
-    if df.empty or "username" not in df.columns:
+    try:
+        ws = get_gsheet_worksheet("Users")
+        records = ws.get_all_records()
+        df = pd.DataFrame(records)
+        if df.empty or "username" not in df.columns:
+            return pd.DataFrame(columns=["username", "password_hash"])
+        return df
+    except Exception as e:
+        st.error(f"Error loading users from Google Sheets: {e}")
         return pd.DataFrame(columns=["username", "password_hash"])
-    return df
 
 
 # --- SESSION STATE INITIALIZATION ---
@@ -73,16 +93,8 @@ else:
             ):
                 st.sidebar.error("Username already taken.")
             else:
-                new_user = pd.DataFrame([
-                    {
-                        "username": username_input,
-                        "password_hash": hash_password(password_input),
-                    }
-                ])
-                updated_df = pd.concat(
-                    [users_df, new_user], ignore_index=True
-                )
-                conn.update(worksheet="Users", data=updated_df)
+                ws = get_gsheet_worksheet("Users")
+                ws.append_row([username_input, hash_password(password_input)])
                 st.sidebar.success("Account created! You can now log in.")
 
 
