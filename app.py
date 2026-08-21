@@ -1,5 +1,8 @@
 import streamlit as st
-from services.database import create_user, get_user_by_username, get_user_by_email, verify_user_email
+from services.database import (
+    create_user, get_user_by_username, get_user_by_email, verify_user_email,
+    add_card_to_library, get_user_library
+)
 from services.scryfall import search_cards, get_card_image_url
 from utils.auth import hash_password, verify_password
 from utils.tokens import generate_verification_token, verify_token
@@ -25,7 +28,7 @@ def show_card_details(card: dict):
     
     st.divider()
     st.subheader("Full Scryfall API Payload")
-    st.json(card)  # Renders the full raw payload cleanly
+    st.json(card)
 
 # 2. Initialize Session State
 if "user" not in st.session_state:
@@ -47,7 +50,6 @@ if "verify_token" in query_params:
 # UNAUTHENTICATED VIEW (Login / Register)
 # ==========================================
 if st.session_state.user is None:
-    # Hide sidebar and collapse controls on login view
     st.markdown("""
         <style>
             [data-testid="stSidebar"] {display: none;}
@@ -60,7 +62,7 @@ if st.session_state.user is None:
         st.title("🃏 MTG Library App")
         tab_login, tab_register = st.tabs(["Login", "Register"])
 
-        # LOGIN TAB (Form wrapped to handle Enter key)
+        # LOGIN TAB
         with tab_login:
             st.subheader("Login to your account")
             with st.form("login_form", clear_on_submit=False):
@@ -80,7 +82,7 @@ if st.session_state.user is None:
                 else:
                     st.error("Invalid username or password.")
 
-        # REGISTER TAB (Form wrapped to handle Enter key)
+        # REGISTER TAB
         with tab_register:
             st.subheader("Create a new account")
             with st.form("register_form", clear_on_submit=False):
@@ -104,28 +106,26 @@ if st.session_state.user is None:
                     st.info(f"Verification token generated: `{token}`")
 
 # ==========================================
-# AUTHENTICATED VIEW (Search & Collection)
+# AUTHENTICATED VIEW (Search & Library)
 # ==========================================
 else:
     user = st.session_state.user
 
-    # Hide automatic page navigation list above username
     st.markdown("""
         <style>
             [data-testid="stSidebarNav"] {display: none;}
         </style>
     """, unsafe_allow_html=True)
 
-    # Sidebar Navigation
     with st.sidebar:
         st.title(f"👤 {user['username']}")
-        menu_selection = st.radio("Navigation", options=["Search", "My Collection"], index=0)
+        menu_selection = st.radio("Navigation", options=["Search", "My Library"], index=0)
         st.divider()
         if st.button("Logout", use_container_width=True):
             st.session_state.user = None
             st.rerun()
 
-    # --- SCREEN 1: SEARCH (Default) ---
+    # --- SCREEN 1: SEARCH ---
     if menu_selection == "Search":
         st.title("🔍 MTG Card Search")
         
@@ -151,14 +151,14 @@ else:
                     with col:
                         img_url = get_card_image_url(card, size="large")
                         
-                        # 1. High-resolution Card Image
+                        # 1. High-Resolution Card Artwork
                         st.image(img_url, use_container_width=True)
                         
                         # 2. Set Name Caption
                         set_name = card.get("set_name", "Unknown Set")
                         st.caption(f"Set: {set_name}")
                         
-                        # 3. Pricing Caption (Escaped \$ and \| to prevent LaTeX/formatting glitches)
+                        # 3. Pricing Caption
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
                         usd_foil = prices.get("usd_foil")
@@ -172,13 +172,61 @@ else:
                         price_line = " \\| ".join(price_parts) if price_parts else "No pricing available"
                         st.caption(price_line)
                         
-                        # 4. Dedicated View Payload Button
-                        if st.button("🔎 View Payload", key=f"payload_btn_{card['id']}_{idx}", use_container_width=True):
-                            show_card_details(card)
+                        # 4. Action Buttons
+                        btn_col1, btn_col2 = st.columns(2)
+                        
+                        with btn_col1:
+                            if st.button("🔎 Payload", key=f"payload_btn_{card['id']}_{idx}", use_container_width=True):
+                                show_card_details(card)
+                                
+                        with btn_col2:
+                            with st.popover("➕ Library", use_container_width=True):
+                                st.markdown(f"**Add {card['name']}**")
+                                
+                                finish = st.selectbox(
+                                    "Finish", 
+                                    options=["nonfoil", "foil", "etched"], 
+                                    key=f"finish_{card['id']}_{idx}"
+                                )
+                                quantity = st.number_input(
+                                    "Quantity", 
+                                    min_value=1, 
+                                    value=1, 
+                                    key=f"qty_{card['id']}_{idx}"
+                                )
+                                condition = st.selectbox(
+                                    "Condition", 
+                                    options=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
+                                    key=f"cond_{card['id']}_{idx}"
+                                )
+                                price_paid = st.number_input(
+                                    "Purchase Price ($)", 
+                                    min_value=0.0, 
+                                    value=float(usd) if (usd and finish == "nonfoil") else (float(usd_foil) if usd_foil else 0.0),
+                                    step=0.25,
+                                    key=f"price_{card['id']}_{idx}"
+                                )
+                                
+                                if st.button("Confirm Add", key=f"confirm_add_{card['id']}_{idx}", use_container_width=True):
+                                    add_card_to_library(
+                                        user_id=user["id"],
+                                        scryfall_id=card["id"],
+                                        finish=finish,
+                                        quantity=quantity,
+                                        condition=condition,
+                                        purchase_price=price_paid if price_paid > 0 else None
+                                    )
+                                    st.success("Added to Library!")
 
                         st.divider()
 
-    # --- SCREEN 2: MY COLLECTION ---
-    elif menu_selection == "My Collection":
-        st.title("📦 My Collection")
-        st.info("Your collection inventory view will display here.")
+    # --- SCREEN 2: MY LIBRARY ---
+    elif menu_selection == "My Library":
+        st.title("📦 My Master Library")
+        
+        library_cards = get_user_library(user["id"])
+        if not library_cards:
+            st.info("Your library is currently empty. Use Search to add cards!")
+        else:
+            st.success(f"Total unique printings in library: **{len(library_cards)}**")
+            st.dataframe(library_cards, use_container_width=True)
