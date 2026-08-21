@@ -21,7 +21,7 @@ def show_card_details(card: dict):
     
     col1, col2 = st.columns([1, 2])
     with col1:
-        st.image(img_url, use_container_width=True)
+        st.image(img_url, width="stretch")
     with col2:
         st.subheader(card.get("name", "Card Details"))
         st.caption(f"**Set:** {card.get('set_name', '')} (`{card.get('set', '').upper()}`)")
@@ -68,7 +68,7 @@ if st.session_state.user is None:
             with st.form("login_form", clear_on_submit=False):
                 login_username = st.text_input("Username", key="login_user")
                 login_password = st.text_input("Password", type="password", key="login_pass")
-                login_submitted = st.form_submit_button("Login", use_container_width=True)
+                login_submitted = st.form_submit_button("Login", width="stretch")
             
             if login_submitted:
                 user_record = get_user_by_username(login_username)
@@ -89,7 +89,7 @@ if st.session_state.user is None:
                 reg_username = st.text_input("Username", key="reg_user")
                 reg_email = st.text_input("Email Address", key="reg_email")
                 reg_password = st.text_input("Password", type="password", key="reg_pass")
-                reg_submitted = st.form_submit_button("Register", use_container_width=True)
+                reg_submitted = st.form_submit_button("Register", width="stretch")
             
             if reg_submitted:
                 if not reg_username or not reg_email or not reg_password:
@@ -121,7 +121,7 @@ else:
         st.title(f"👤 {user['username']}")
         menu_selection = st.radio("Navigation", options=["Search", "My Library"], index=0)
         st.divider()
-        if st.button("Logout", use_container_width=True):
+        if st.button("Logout", width="stretch"):
             st.session_state.user = None
             st.rerun()
 
@@ -152,7 +152,7 @@ else:
                         img_url = get_card_image_url(card, size="large")
                         
                         # 1. High-Resolution Card Artwork
-                        st.image(img_url, use_container_width=True)
+                        st.image(img_url, width="stretch")
                         
                         # 2. Set Name Caption
                         set_name = card.get("set_name", "Unknown Set")
@@ -176,11 +176,11 @@ else:
                         btn_col1, btn_col2 = st.columns(2)
                         
                         with btn_col1:
-                            if st.button("🔎 Payload", key=f"payload_btn_{card['id']}_{idx}", use_container_width=True):
+                            if st.button("🔎 Payload", key=f"payload_btn_{card['id']}_{idx}", width="stretch"):
                                 show_card_details(card)
                                 
                         with btn_col2:
-                            with st.popover("➕ Library", use_container_width=True):
+                            with st.popover("➕ Library", width="stretch"):
                                 st.markdown(f"**Add {card['name']}**")
                                 
                                 finish = st.selectbox(
@@ -207,7 +207,7 @@ else:
                                     key=f"price_{card['id']}_{idx}"
                                 )
                                 
-                                if st.button("Confirm Add", key=f"confirm_add_{card['id']}_{idx}", use_container_width=True):
+                                if st.button("Confirm Add", key=f"confirm_add_{card['id']}_{idx}", width="stretch"):
                                     add_card_to_library(
                                         user_id=user["id"],
                                         scryfall_id=card["id"],
@@ -229,4 +229,4 @@ else:
             st.info("Your library is currently empty. Use Search to add cards!")
         else:
             st.success(f"Total unique printings in library: **{len(library_cards)}**")
-            st.dataframe(library_cards, use_container_width=True)
+            st.dataframe(library_cards, width="stretch")
