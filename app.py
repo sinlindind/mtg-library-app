@@ -176,45 +176,42 @@ else:
                         if st.button("🔍 Details", key=f"details_btn_{card_id}", width='stretch'):
                             show_card_details(card)
 
-                        # 4. Clean Popover Modal for Adding to Library
-                        with st.popover("📦 Add to Library", width='stretch'):
-                            st.subheader("Add Quantities")
-                            
-                            col_reg, col_foil = st.columns(2)
-                            with col_reg:
-                                qty_reg = st.number_input("Regular Qty", min_value=0, value=0, step=1, key=f"pop_reg_{card_id}")
-                            with col_foil:
-                                qty_foil = st.number_input("Foil Qty", min_value=0, value=0, step=1, key=f"pop_foil_{card_id}")
-                            
-                            condition = st.selectbox(
-                                "Condition", 
-                                options=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
-                                key=f"pop_cond_{card_id}"
-                            )
-                            
-                            if st.button("Confirm Add", key=f"pop_confirm_{card_id}", width='stretch'):
-                                if qty_reg == 0 and qty_foil == 0:
-                                    st.warning("Please enter a quantity greater than 0.")
-                                else:
-                                    if qty_reg > 0:
-                                        add_card_to_library(
-                                            user_id=user["id"],
-                                            scryfall_id=card["id"],
-                                            finish="nonfoil",
-                                            quantity=qty_reg,
-                                            condition=condition,
-                                            purchase_price=float(usd) if usd else None
-                                        )
-                                    if qty_foil > 0:
-                                        add_card_to_library(
-                                            user_id=user["id"],
-                                            scryfall_id=card["id"],
-                                            finish="foil",
-                                            quantity=qty_foil,
-                                            condition=condition,
-                                            purchase_price=float(usd_foil) if usd_foil else None
-                                        )
-                                    st.success("Library updated!")
+                        # 4. Direct Inline Controls (No Popover)
+                        col_reg, col_foil = st.columns(2)
+                        with col_reg:
+                            qty_reg = st.number_input("Reg Qty", min_value=0, value=0, step=1, key=f"inline_reg_{card_id}")
+                        with col_foil:
+                            qty_foil = st.number_input("Foil Qty", min_value=0, value=0, step=1, key=f"inline_foil_{card_id}")
+                        
+                        condition = st.selectbox(
+                            "Condition", 
+                            options=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
+                            key=f"inline_cond_{card_id}"
+                        )
+                        
+                        if st.button("➕ Add to Library", key=f"inline_add_{card_id}", width='stretch'):
+                            if qty_reg == 0 and qty_foil == 0:
+                                st.warning("Enter a quantity greater than 0.")
+                            else:
+                                if qty_reg > 0:
+                                    add_card_to_library(
+                                        user_id=user["id"],
+                                        scryfall_id=card["id"],
+                                        finish="nonfoil",
+                                        quantity=qty_reg,
+                                        condition=condition,
+                                        purchase_price=float(usd) if usd else None
+                                    )
+                                if qty_foil > 0:
+                                    add_card_to_library(
+                                        user_id=user["id"],
+                                        scryfall_id=card["id"],
+                                        finish="foil",
+                                        quantity=qty_foil,
+                                        condition=condition,
+                                        purchase_price=float(usd_foil) if usd_foil else None
+                                    )
+                                st.toast("Library updated!", icon="✅")
 
                         st.divider()
 
