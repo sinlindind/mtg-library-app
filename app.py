@@ -247,8 +247,51 @@ else:
         st.title("📦 My Library")
         
         library_cards = get_user_library(user["id"])
-        if not library_cards:
+        
+        # Filter out records where total quantity is 0 or less
+        active_cards = [card for card in library_cards if card.get("quantity", 0) > 0]
+        
+        if not active_cards:
             st.info("Your library is currently empty. Use Search to add cards!")
         else:
-            st.success(f"Total unique printings in library: **{len(library_cards)}**")
-            st.dataframe(library_cards, width='stretch')
+            st.success(f"Total entries in library: **{len(active_cards)}**")
+            
+            for idx, item in enumerate(active_cards):
+                item_id = f"{item.get('id', idx)}"
+                scryfall_id = item.get("scryfall_id")
+                
+                # Fetch Scryfall card data by ID
+                card_data = get_card_by_id(scryfall_id) if scryfall_id else None
+                
+                col_img, col_info, col_actions = st.columns([1, 2, 2])
+                
+                # COLUMN 1: Small Image
+                with col_img:
+                    if card_data:
+                        img_url = get_card_image_url(card_data, size="small")
+                        st.image(img_url, width=150)
+                    else:
+                        st.caption("No image available")
+                
+                # COLUMN 2: Card Name, Set Name, Quantity/Finish/Condition
+                with col_info:
+                    card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
+                    st.subheader(card_name)
+                    
+                    if card_data:
+                        set_name = card_data.get("set_name", "Unknown Set")
+                        set_code = card_data.get("set", "").upper()
+                        st.markdown(f"**Set:** {set_name} (`{set_code}`)")
+                    
+                    qty = item.get("quantity", 0)
+                    finish = item.get("finish", "nonfoil").capitalize()
+                    cond = item.get("condition", "Near Mint")
+                    
+                    st.markdown("---")
+                    st.markdown(f"• **{qty}x** {finish} ({cond})")
+                
+                # COLUMN 3: Placeholder for upcoming features
+                with col_actions:
+                    st.empty()
+                
+                st.divider()
