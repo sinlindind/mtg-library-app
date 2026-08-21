@@ -110,7 +110,7 @@ else:
         
         search_query = st.text_input(
             "Search Scryfall", 
-            placeholder="Enter card name or syntax (e.g. 'Lightning Bolt', 't:creature c:r')"
+            placeholder="Enter card name or syntax (e.g. 'Sol Ring' or '!'Sol Ring'')"
         )
 
         if search_query:
@@ -120,29 +120,30 @@ else:
             if not results:
                 st.warning("No cards found matching your query.")
             else:
-                st.success(f"Found **{len(results)} cards")
+                st.success(f"Found **{len(results)} versions/printings")
                 
-                # 1. Initialize 4-Column Grid Layout
+                # 4-Column Grid
                 cols = st.columns(4)
                 
                 for idx, card in enumerate(results):
-                    # 2. Distribute cards across the 4 columns using modulo
                     col = cols[idx % 4]
                     
                     with col:
-                        # Clear image rendering
+                        # Card Artwork
                         img_url = get_card_image_url(card, size="large")
                         st.image(img_url, use_container_width=True)
                         
-                        # Set Information & Metadata
+                        # Card Title & Specific Set / Collector Number
                         st.markdown(f"**")
                         
                         set_name = card.get("set_name", "Unknown Set")
                         set_code = card.get("set", "").upper()
+                        cn = card.get("collector_number", "")
                         rarity = card.get("rarity", "").capitalize()
-                        st.caption(f"**Set:** {set_name} (`{set_code}`)\n\n*{rarity}*")
                         
-                        # Pricing Info
+                        st.caption(f"**Set:** {set_name} (`{set_code}`) #{cn}\n\n*{rarity}*")
+                        
+                        # Price Display per printing
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
                         usd_foil = prices.get("usd_foil")
@@ -158,14 +159,13 @@ else:
                         else:
                             st.caption("*No pricing available*")
                         
-                        # View Details Popover Button
+                        # View Details Popover
                         with st.popover("View Details", use_container_width=True):
-                            st.subheader(card["name"])
+                            st.subheader(f"{card['name']} ({set_code} #{cn})")
                             st.write(f"**Type:** {card.get('type_line', 'N/A')}")
                             st.write(f"**Mana Cost:** {card.get('mana_cost', 'N/A')}")
                             st.divider()
                             
-                            # Oracle text extraction for standard & transform cards
                             oracle_text = card.get("oracle_text")
                             if not oracle_text and "card_faces" in card:
                                 oracle_text = "\n\n---\n\n".join(
