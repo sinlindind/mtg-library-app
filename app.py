@@ -147,7 +147,7 @@ else:
                 for idx, card in enumerate(results):
                     card_id = f"{card['id']}_{idx}"
                     
-                    col_img, col_info, col_actions = st.columns([1, 2, 2])
+                    col_img, col_info, col_actions = st.columns([1.5, 2, 2])
                     
                     # COLUMN 1: Image
                     with col_img:
