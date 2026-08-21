@@ -133,10 +133,11 @@ else:
                         img_url = get_card_image_url(card, size="large")
                         st.image(img_url, use_container_width=True)
                         
-                        # 1. Extract Set Name
+                        # 1. Extract Set Name with 'Set:' prefix
                         set_name = card.get("set_name", "Unknown Set")
+                        set_line = f"Set: {set_name}"
                         
-                        # 2. Extract Prices
+                        # 2. Extract Prices cleanly without raw pipe formatting
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
                         usd_foil = prices.get("usd_foil")
@@ -147,10 +148,11 @@ else:
                         if usd_foil:
                             price_parts.append(f"Foil: ${usd_foil}")
                             
-                        price_text = " | ".join(price_parts) if price_parts else "No pricing available"
+                        price_line = " • ".join(price_parts) if price_parts else "No pricing available"
                         
-                        # 3. Clean Single Caption (Set Name + Prices)
-                        st.caption(f"Set: {set_name}\n\n{price_text}")
+                        # 3. Render clean distinct captions
+                        st.caption(set_line)
+                        st.caption(price_line)
                         
                         # View Details Popover
                         with st.popover("View Details", use_container_width=True):
