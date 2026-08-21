@@ -60,7 +60,7 @@ if st.session_state.user is None:
         st.title("🃏 MTG Library App")
         tab_login, tab_register = st.tabs(["Login", "Register"])
 
-        # LOGIN TAB
+        # LOGIN TAB (Form wrapped to handle Enter key)
         with tab_login:
             st.subheader("Login to your account")
             with st.form("login_form", clear_on_submit=False):
@@ -80,7 +80,7 @@ if st.session_state.user is None:
                 else:
                     st.error("Invalid username or password.")
 
-        # REGISTER TAB
+        # REGISTER TAB (Form wrapped to handle Enter key)
         with tab_register:
             st.subheader("Create a new account")
             with st.form("register_form", clear_on_submit=False):
@@ -151,19 +151,14 @@ else:
                     with col:
                         img_url = get_card_image_url(card, size="large")
                         
-                        # Clickable Image Trigger
-                        if st.button(
-                            label=f"![{card['name']}]({img_url})", 
-                            key=f"img_click_{card['id']}_{idx}", 
-                            use_container_width=True
-                        ):
-                            show_card_details(card)
+                        # 1. High-resolution Card Image
+                        st.image(img_url, use_container_width=True)
                         
-                        # Set Name
+                        # 2. Set Name Caption
                         set_name = card.get("set_name", "Unknown Set")
                         st.caption(f"Set: {set_name}")
                         
-                        # Pricing (Escaped \$ and \| to prevent LaTeX/formatting glitches)
+                        # 3. Pricing Caption (Escaped \$ and \| to prevent LaTeX/formatting glitches)
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
                         usd_foil = prices.get("usd_foil")
@@ -176,6 +171,10 @@ else:
                             
                         price_line = " \\| ".join(price_parts) if price_parts else "No pricing available"
                         st.caption(price_line)
+                        
+                        # 4. Dedicated View Payload Button
+                        if st.button("🔎 View Payload", key=f"payload_btn_{card['id']}_{idx}", use_container_width=True):
+                            show_card_details(card)
 
                         st.divider()
 
