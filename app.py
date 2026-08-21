@@ -1,5 +1,6 @@
 import hashlib
 import math
+import uuid
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
@@ -39,16 +40,18 @@ def load_users() -> pd.DataFrame:
         records = ws.get_all_records()
         df = pd.DataFrame(records)
         if df.empty or "username" not in df.columns:
-            return pd.DataFrame(columns=["username", "password_hash"])
+            return pd.DataFrame(columns=["user_id", "username", "password_hash"])
         return df
     except Exception as e:
         st.error(f"Error loading users from Google Sheets: {e}")
-        return pd.DataFrame(columns=["username", "password_hash"])
+        return pd.DataFrame(columns=["user_id", "username", "password_hash"])
 
 
 # --- SESSION STATE INITIALIZATION ---
 if "logged_in_user" not in st.session_state:
     st.session_state.logged_in_user = None
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
 
 # --- AUTHENTICATION SIDEBAR ---
 st.sidebar.title("User Portal")
@@ -57,6 +60,7 @@ if st.session_state.logged_in_user:
     st.sidebar.success(f"Logged in as **{st.session_state.logged_in_user}**")
     if st.sidebar.button("Log Out"):
         st.session_state.logged_in_user = None
+        st.session_state.user_id = None
         st.rerun()
 else:
     auth_mode = st.sidebar.radio("Select Action", ["Login", "Register"])
@@ -78,7 +82,9 @@ else:
                     & (users_df["password_hash"] == hashed_pw)
                 ]
                 if not match.empty:
+                    # Save both the username and user_id to session state
                     st.session_state.logged_in_user = username_input
+                    st.session_state.user_id = match.iloc[0]["user_id"]
                     st.rerun()
                 else:
                     st.sidebar.error("Invalid username or password.")
@@ -93,8 +99,9 @@ else:
             ):
                 st.sidebar.error("Username already taken.")
             else:
+                new_user_id = str(uuid.uuid4())
                 ws = get_gsheet_worksheet("Users")
-                ws.append_row([username_input, hash_password(password_input)])
+                ws.append_row([new_user_id, username_input, hash_password(password_input)])
                 st.sidebar.success("Account created! You can now log in.")
 
 
