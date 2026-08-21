@@ -133,25 +133,24 @@ else:
                         img_url = get_card_image_url(card, size="large")
                         st.image(img_url, use_container_width=True)
                         
-                        # 1. Extract Set Name with 'Set:' prefix
+                        # 1. Set Name
                         set_name = card.get("set_name", "Unknown Set")
-                        set_line = f"Set: {set_name}"
+                        st.caption(f"Set: {set_name}")
                         
-                        # 2. Extract Prices cleanly without raw pipe formatting
+                        # 2. Extract Prices & Escaped Dollar Signs (\$)
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
                         usd_foil = prices.get("usd_foil")
                         
                         price_parts = []
                         if usd:
-                            price_parts.append(f"Reg: ${usd}")
+                            price_parts.append(f"Reg: \\${usd}")
                         if usd_foil:
-                            price_parts.append(f"Foil: ${usd_foil}")
+                            price_parts.append(f"Foil: \\${usd_foil}")
                             
                         price_line = " • ".join(price_parts) if price_parts else "No pricing available"
                         
-                        # 3. Render clean distinct captions
-                        st.caption(set_line)
+                        # 3. Clean Price Display
                         st.caption(price_line)
                         
                         # View Details Popover
