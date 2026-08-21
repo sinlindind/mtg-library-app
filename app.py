@@ -125,9 +125,12 @@ else:
             st.session_state.user = None
             st.rerun()
 
-    # --- SCREEN 1: SEARCH ---
+   # --- SCREEN 1: SEARCH ---
     if menu_selection == "Search":
         st.title("🔍 MTG Card Search")
+        
+        # Fetch entire library once to calculate owned quantities efficiently
+        user_library = get_user_library(user["id"])
         
         search_query = st.text_input(
             "Search Scryfall", 
@@ -147,6 +150,11 @@ else:
                 for idx, card in enumerate(results):
                     card_id = f"{card['id']}_{idx}"
                     
+                    # Calculate current owned quantities for this specific printing
+                    owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
+                    owned_reg = sum(item.get("quantity", 0) for item in owned_entries if item.get("finish") == "nonfoil")
+                    owned_foil = sum(item.get("quantity", 0) for item in owned_entries if item.get("finish") == "foil")
+                    
                     col_img, col_info, col_actions = st.columns([2, 2, 2])
                     
                     # COLUMN 1: Image
@@ -154,7 +162,7 @@ else:
                         img_url = get_card_image_url(card, size="large")
                         st.image(img_url, width='stretch')
                     
-                    # COLUMN 2: Details
+                    # COLUMN 2: Details & Library Ownership
                     with col_info:
                         st.subheader(card.get("name", "Unknown Card"))
                         set_name = card.get("set_name", "Unknown Set")
@@ -167,6 +175,10 @@ else:
                         
                         st.markdown(f"**Regular Price:** ${usd if usd else 'N/A'}")
                         st.markdown(f"**Foil Price:** ${usd_foil if usd_foil else 'N/A'}")
+                        
+                        # Display Current Collection Quantity
+                        st.markdown("---")
+                        st.markdown(f"**In Library:** {owned_reg} Regular | {owned_foil} Foil")
                     
                     # COLUMN 3: Add to Library Controls
                     with col_actions:
@@ -218,6 +230,7 @@ else:
                                         purchase_price=float(usd_foil) if usd_foil else None
                                     )
                                 st.toast("Library updated!", icon="✅")
+                                st.rerun()
 
                     st.divider()
 
