@@ -6,27 +6,10 @@ from utils.tokens import generate_verification_token, verify_token
 
 st.set_page_config(
     page_title="MTG Library App", 
-    page_icon="", 
+    page_icon="🃏", 
     layout="wide",
     initial_sidebar_state="collapsed" if "user" not in st.session_state or st.session_state.user is None else "expanded"
 )
-
-st.markdown("""
-    <style>
-        /* Turn Streamlit buttons with images into transparent clickable cards */
-        div[data-testid="stButton"] > button.card-img-btn {
-            background: none !important;
-            border: none !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-        }
-        div[data-testid="stButton"] > button.card-img-btn:hover {
-            transform: scale(1.03);
-            transition: transform 0.2s ease-in-out;
-            cursor: pointer;
-        }
-    </style>
-""", unsafe_allow_html=True)
 
 # 1. Dialog Modal to display Image and Full Scryfall JSON Payload
 @st.dialog("Card Details", width="large")
@@ -143,20 +126,14 @@ else:
                     with col:
                         img_url = get_card_image_url(card, size="large")
                         
-                        # 1. Clickable Image Trigger
-                        # Render card image as a button icon/label
-                        if st.button(
-                            label=f"![{card['name']}]({img_url})", 
-                            key=f"img_click_{card['id']}_{idx}", 
-                            use_container_width=True
-                        ):
-                            show_card_details(card)
+                        # Display card image
+                        st.image(img_url, use_container_width=True)
                         
-                        # 2. Set Name Caption
+                        # Set Name
                         set_name = card.get("set_name", "Unknown Set")
                         st.caption(f"Set: {set_name}")
                         
-                        # 3. Pricing Caption
+                        # Pricing
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
                         usd_foil = prices.get("usd_foil")
@@ -169,6 +146,10 @@ else:
                             
                         price_line = " \\| ".join(price_parts) if price_parts else "No pricing available"
                         st.caption(price_line)
+                        
+                        # Clickable Trigger (Replaces 'View Details' button)
+                        if st.button("🔎 View Payload", key=f"card_btn_{card['id']}_{idx}", width="stretch"):
+                            show_card_details(card)
 
                         st.divider()
 
