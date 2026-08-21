@@ -152,7 +152,7 @@ else:
                             price_str.append(f"Foil: ${usd_foil}")
                         
                         if price_str:
-                            st.caption(" | ".join(price_str))
+                            st.caption(" / ".join(price_str))
                         else:
                             st.caption("*No pricing available*")
                         
