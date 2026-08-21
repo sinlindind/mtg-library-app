@@ -150,7 +150,7 @@ else:
                         price_text = " | ".join(price_parts) if price_parts else "No pricing available"
                         
                         # 3. Clean Single Caption (Set Name + Prices)
-                        st.caption(f"Set: {set_name}\n{price_text}")
+                        st.caption(f"Set: {set_name} \n {price_text}")
                         
                         # View Details Popover
                         with st.popover("View Details", use_container_width=True):
