@@ -2,6 +2,8 @@ import streamlit as st
 from services.database import create_user, get_user_by_username, get_user_by_email, verify_user_email
 from utils.auth import hash_password, verify_password
 from utils.tokens import generate_verification_token, verify_token
+import streamlit as st
+from services.scryfall import search_cards, get_card_image_url
 
 st.set_page_config(page_title="MTG Library App", page_icon="🃏", layout="wide")
 
@@ -91,3 +93,39 @@ else:
                 
                 st.success("Account created successfully!")
                 st.info(f"Verification token generated: `{token}` (Use this to test your email verification link).")
+
+if st.session_state.user:
+    st.title("📚 MTG Card Search")
+    
+    # Search input field
+    search_query = st.text_input(
+        "Search Scryfall", 
+        placeholder="Enter name or syntax (e.g. 'Black Lotus', 't:dragon c:red')"
+    )
+
+    if search_query:
+        with st.spinner("Searching Scryfall..."):
+            results = search_cards(search_query)
+        
+        if not results:
+            st.warning("No cards found matching your query.")
+        else:
+            st.success(f"Found **{len(results)} cards")
+            
+            # Render cards in a 3-column grid
+            cols = st.columns(3)
+            for idx, card in enumerate(results):
+                col = cols[idx % 3]
+                
+                with col:
+                    img_url = get_card_image_url(card)
+                    st.image(img_url, use_container_width=True)
+                    st.markdown(f"**")
+                    
+                    # Display mana cost and set details
+                    mana_cost = card.get("mana_cost", "")
+                    type_line = card.get("type_line", "")
+                    set_name = card.get("set_name", "")
+                    
+                    st.caption(f"{type_line}\n\n*{set_name}*")
+                    st.divider()
