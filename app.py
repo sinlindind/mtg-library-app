@@ -143,53 +143,59 @@ else:
             else:
                 st.success(f"Found **{len(results)}** printings")
                 
-                # 4-Column Grid
-                cols = st.columns(4)
+                # List-View Row Layout: 3 Columns per card entry
                 for idx, card in enumerate(results):
-                    col = cols[idx % 4]
                     card_id = f"{card['id']}_{idx}"
                     
-                    with col:
+                    col_img, col_info, col_actions = st.columns([1, 2, 2])
+                    
+                    # COLUMN 1: Image
+                    with col_img:
                         img_url = get_card_image_url(card, size="large")
-                        
-                        # 1. High-Resolution Artwork
-                        st.image(img_url, width='stretch')
-                        
-                        # 2. Metadata Captions
+                        st.image(img_url, use_container_width=True)
+                    
+                    # COLUMN 2: Details
+                    with col_info:
+                        st.subheader(card.get("name", "Unknown Card"))
                         set_name = card.get("set_name", "Unknown Set")
-                        st.caption(f"Set: {set_name}")
+                        set_code = card.get("set", "").upper()
+                        st.markdown(f"**Set:** {set_name} (`{set_code}`)")
                         
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
                         usd_foil = prices.get("usd_foil")
                         
-                        price_parts = []
-                        if usd:
-                            price_parts.append(f"Reg: \\${usd}")
-                        if usd_foil:
-                            price_parts.append(f"Foil: \\${usd_foil}")
-                            
-                        price_line = " \\| ".join(price_parts) if price_parts else "No pricing available"
-                        st.caption(price_line)
-                        
-                        # 3. Details Button
-                        if st.button("🔍 Details", key=f"details_btn_{card_id}", width='stretch'):
-                            show_card_details(card)
-
-                        # 4. Direct Inline Controls (No Popover)
-                        col_reg, col_foil = st.columns(2)
-                        with col_reg:
-                            qty_reg = st.number_input("Reg Qty", min_value=0, value=0, step=1, key=f"inline_reg_{card_id}")
-                        with col_foil:
-                            qty_foil = st.number_input("Foil Qty", min_value=0, value=0, step=1, key=f"inline_foil_{card_id}")
+                        st.markdown(f"**Regular Price:** ${usd if usd else 'N/A'}")
+                        st.markdown(f"**Foil Price:** ${usd_foil if usd_foil else 'N/A'}")
+                    
+                    # COLUMN 3: Add to Library Controls
+                    with col_actions:
+                        st.write("**Add to Library**")
+                        c_reg, c_foil = st.columns(2)
+                        with c_reg:
+                            qty_reg = st.number_input(
+                                "Reg Qty", 
+                                min_value=0, 
+                                value=0, 
+                                step=1, 
+                                key=f"row_reg_{card_id}"
+                            )
+                        with c_foil:
+                            qty_foil = st.number_input(
+                                "Foil Qty", 
+                                min_value=0, 
+                                value=0, 
+                                step=1, 
+                                key=f"row_foil_{card_id}"
+                            )
                         
                         condition = st.selectbox(
                             "Condition", 
                             options=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
-                            key=f"inline_cond_{card_id}"
+                            key=f"row_cond_{card_id}"
                         )
                         
-                        if st.button("➕ Add to Library", key=f"inline_add_{card_id}", width='stretch'):
+                        if st.button("➕ Add to Library", key=f"row_add_{card_id}", use_container_width=True):
                             if qty_reg == 0 and qty_foil == 0:
                                 st.warning("Enter a quantity greater than 0.")
                             else:
@@ -213,7 +219,7 @@ else:
                                     )
                                 st.toast("Library updated!", icon="✅")
 
-                        st.divider()
+                    st.divider()
 
     # --- SCREEN 2: MY LIBRARY ---
     elif menu_selection == "My Library":
