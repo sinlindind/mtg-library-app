@@ -52,3 +52,11 @@ def get_card_image_url(card: dict, size: str = "large") -> str:
             return face["image_uris"].get(size, face["image_uris"].get("normal", ""))
             
     return "https://errors.scryfall.com/unknown.jpg"
+
+def get_card_by_id(scryfall_id: str) -> dict:
+    """Fetches full card JSON payload from Scryfall by its ID."""
+    url = f"https://api.scryfall.com/cards/{scryfall_id}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()
+    return {}

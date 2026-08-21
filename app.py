@@ -3,7 +3,7 @@ from services.database import (
     create_user, get_user_by_username, get_user_by_email, verify_user_email,
     add_card_to_library, get_user_library
 )
-from services.scryfall import search_cards, get_card_image_url
+from services.scryfall import search_cards, get_card_image_url, get_card_by_id
 from utils.auth import hash_password, verify_password
 from utils.tokens import generate_verification_token, verify_token
 
