@@ -148,7 +148,7 @@ else:
                         if usd_foil:
                             price_parts.append(f"Foil: \\${usd_foil}")
                             
-                        price_line = " • ".join(price_parts) if price_parts else "No pricing available"
+                        price_line = " | ".join(price_parts) if price_parts else "No pricing available"
                         
                         # 3. Clean Price Display
                         st.caption(price_line)
