@@ -45,24 +45,56 @@ def verify_user_email(email: str):
 
 
 # ==========================================
-# Library Functions
+# User Cards Functions
 # ==========================================
 
-def add_card_to_library(user_id: int, scryfall_id: str, finish: str, quantity: int, condition: str, purchase_price: float = None):
-    """Adds a card item to the user library."""
-    data = {
-        "user_id": user_id,
-        "scryfall_id": scryfall_id,
-        "finish": finish,
-        "quantity": quantity,
-        "condition": condition,
-        "purchase_price": purchase_price
-    }
-    response = supabase.table("library").insert(data).execute()
+def add_card_to_library(
+    user_id: str, 
+    scryfall_id: str, 
+    finish: str, 
+    quantity: int, 
+    condition: str = "Near Mint", 
+    purchase_price: float = None,
+    language: str = "en",
+    notes: str = None
+):
+    """
+    Adds or updates a card entry in user_cards.
+    Increments quantity if the unique card entry already exists.
+    """
+    existing_entry = supabase.table("user_cards") \
+        .select("id, quantity") \
+        .eq("user_id", user_id) \
+        .eq("scryfall_id", scryfall_id) \
+        .eq("finish", finish) \
+        .eq("condition", condition) \
+        .execute()
+
+    if existing_entry.data:
+        card_record = existing_entry.data[0]
+        new_quantity = card_record["quantity"] + quantity
+        
+        response = supabase.table("user_cards") \
+            .update({"quantity": new_quantity}) \
+            .eq("id", card_record["id"]) \
+            .execute()
+    else:
+        data = {
+            "user_id": user_id,
+            "scryfall_id": scryfall_id,
+            "finish": finish,
+            "condition": condition,
+            "language": language,
+            "quantity": quantity,
+            "purchase_price": purchase_price,
+            "notes": notes
+        }
+        response = supabase.table("user_cards").insert(data).execute()
+
     return response.data[0] if response.data else None
 
 
-def get_user_library(user_id: int):
-    """Fetches all items in user library."""
-    response = supabase.table("library").select("*").eq("user_id", user_id).execute()
+def get_user_library(user_id: str):
+    """Fetches all items in user_cards for a given user UUID."""
+    response = supabase.table("user_cards").select("*").eq("user_id", user_id).execute()
     return response.data if response.data else []
