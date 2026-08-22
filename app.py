@@ -245,7 +245,7 @@ else:
         user_library = get_user_library(user["id"])
         
         # Native JS Autocomplete Search Box Component
-        search_query = scryfall_autocomplete_box(key="main_mtg_search")
+        search_query = scryfall_autocomplete_box()
 
         if search_query and len(search_query.strip()) >= 2:
             with st.spinner(f"Searching printings for '{search_query}'..."):
