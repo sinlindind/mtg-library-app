@@ -255,7 +255,8 @@ else:
                         set_code = card.get("set", "").upper()
                         released_date = card.get("released_at", "")
                         
-                        st.caption(f"Set: **{set_name}** (`{set_code}`) • Released: {released_date}")
+                        st.caption(f"Set: **{set_name}**")
+                        st.caption(f"Released: {released_date}")
                         
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
@@ -264,10 +265,10 @@ else:
                         tcg_url = purchase_uris.get("tcgplayer")
 
                         # TCGplayer Hyperlinks
-                        reg_str = f"[${usd}]({tcg_url})" if usd and float(usd) > 0 and tcg_url else (f"${usd}" if usd else "N/A")
-                        foil_str = f"[${usd_foil}]({tcg_url})" if usd_foil and float(usd_foil) > 0 and tcg_url else (f"${usd_foil}" if usd_foil else "N/A")
+                        reg_str = f"${usd}" if usd else "N/A"
+                        foil_str = f"${usd_foil}" if usd_foil else "N/A"
 
-                        st.markdown(f"**Price:** Reg: {reg_str} / Foil: {foil_str}")
+                        st.caption(f"Reg: {reg_str} / Foil: {foil_str}")
                         
                         valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
                         if valid_owned:
