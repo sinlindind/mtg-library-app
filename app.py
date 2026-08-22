@@ -243,7 +243,7 @@ else:
                     card_id = f"{card['id']}_{idx}"
                     owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
                     
-                    col_img, col_info, col_actions = st.columns([1.2, 2.8, 2])
+                    col_img, col_info, col_actions = st.columns([2.5, 2.8, 2])
                     
                     with col_img:
                         img_url = get_card_image_url(card, size="large")
