@@ -37,6 +37,14 @@ def search_scryfall_names(search_term: str) -> list[str]:
 if "user" not in st.session_state:
     st.session_state.user = None
 
+# Search state persistence and input clear control
+if "active_search_label" not in st.session_state:
+    st.session_state.active_search_label = ""
+if "active_search_results" not in st.session_state:
+    st.session_state.active_search_results = []
+if "searchbox_key_counter" not in st.session_state:
+    st.session_state.searchbox_key_counter = 0
+
 # 3. Handle Verification Link in URL
 query_params = st.query_params
 if "verify_token" in query_params:
@@ -132,16 +140,28 @@ else:
         
         user_library = get_user_library(user["id"])
         
-        # Native JS Autocomplete Search Box Component
-        search_query = st_searchbox(
+        # Native JS Autocomplete Search Box with dynamic key to auto-clear on select
+        current_search_key = f"scryfall_autocomplete_box_{st.session_state.searchbox_key_counter}"
+        search_selection = st_searchbox(
             search_scryfall_names,
             placeholder="Type a card name (e.g. 'Sol Ring')...",
-            key="scryfall_autocomplete_box"
+            key=current_search_key
         )
         
-        if search_query and len(search_query.strip()) >= 2:
-            with st.spinner(f"Searching printings for '{search_query}'..."):
-                results = search_cards(search_query.strip())
+        # Process new selection, save active results, then clear the input box
+        if search_selection and len(search_selection.strip()) >= 2:
+            query = search_selection.strip()
+            with st.spinner(f"Searching printings for '{query}'..."):
+                results = search_cards(query)
+                st.session_state.active_search_label = query
+                st.session_state.active_search_results = results
+                st.session_state.searchbox_key_counter += 1
+                st.rerun()
+
+        # Display the active search query label and saved search results
+        if st.session_state.active_search_label:
+            st.subheader(f"Results for: **{st.session_state.active_search_label}**")
+            results = st.session_state.active_search_results
             
             if not results:
                 st.warning("No cards found matching your query.")
