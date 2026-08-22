@@ -1,9 +1,12 @@
 import streamlit as st
+from streamlit_searchbox import st_searchbox
+import requests
+
 from services.database import (
     create_user, get_user_by_username, get_user_by_email, verify_user_email,
     add_card_to_library, get_user_library
 )
-from services.scryfall import search_cards, get_card_image_url, get_card_by_id, autocomplete_cards
+from services.scryfall import search_cards, get_card_image_url, get_card_by_id
 from utils.auth import hash_password, verify_password
 from utils.tokens import generate_verification_token, verify_token
 
@@ -14,11 +17,25 @@ st.set_page_config(
     initial_sidebar_state="collapsed" if "user" not in st.session_state or st.session_state.user is None else "expanded"
 )
 
-# 1. Dialog Modal to display Image and Full Scryfall JSON Payload
+# 1. Scryfall Autocomplete API Handler for the searchbox
+def search_scryfall_autocomplete(search_term: str) -> list[str]:
+    """Fetches autocomplete suggestions from Scryfall as the user types."""
+    if not search_term or len(search_term.strip()) < 2:
+        return []
+    
+    url = "https://api.scryfall.com/cards/autocomplete"
+    try:
+        res = requests.get(url, params={"q": search_term}, timeout=3)
+        if res.status_code == 200:
+            return res.json().get("data", [])
+    except Exception:
+        pass
+    return []
+
+# 2. Dialog Modal for Card Details
 @st.dialog("Card Details", width="large")
 def show_card_details(card: dict):
     img_url = get_card_image_url(card, size="large")
-    
     col1, col2 = st.columns([1, 2])
     with col1:
         st.image(img_url, width='stretch')
@@ -30,11 +47,11 @@ def show_card_details(card: dict):
     st.subheader("Full Scryfall API Payload")
     st.json(card)
 
-# 2. Initialize Session State
+# 3. Initialize Session State
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# 3. Handle Verification Link in URL
+# 4. Handle Verification Link in URL
 query_params = st.query_params
 if "verify_token" in query_params:
     token = query_params["verify_token"]
@@ -129,34 +146,17 @@ else:
     if menu_selection == "Search":
         st.title("🔍 MTG Card Search")
         
-        # Fetch entire library once to calculate owned quantities efficiently
         user_library = get_user_library(user["id"])
         
-        # Smart Search: Live typing input
-        typed_query = st.text_input(
-            "Search MTG Cards", 
-            placeholder="Type at least 2 letters (e.g. 'Sol Ring')"
+        # Google-style live searchbox widget
+        search_query = st_searchbox(
+            search_scryfall_autocomplete,
+            placeholder="Type a card name (e.g. 'Sol Ring')...",
+            key="scryfall_searchbox"
         )
 
-        # Retrieve autocomplete matches from Scryfall
-        suggestions = autocomplete_cards(typed_query) if len(typed_query.strip()) >= 2 else []
-
-        selected_card = None
-        if suggestions:
-            selected_card = st.selectbox(
-                "Suggestions found (select to refine search):", 
-                options=["-- Use raw typed query --"] + suggestions,
-                index=1 if len(suggestions) == 1 else 0
-            )
-
-        # Determine active search string
-        if selected_card and selected_card != "-- Use raw typed query --":
-            search_query = selected_card
-        else:
-            search_query = typed_query.strip()
-
         if search_query:
-            with st.spinner("Searching Scryfall..."):
+            with st.spinner(f"Searching printings for '{search_query}'..."):
                 results = search_cards(search_query)
             
             if not results:
@@ -164,11 +164,9 @@ else:
             else:
                 st.success(f"Found **{len(results)}** printings")
                 
-                # List-View Row Layout: 3 Columns per card entry
                 for idx, card in enumerate(results):
                     card_id = f"{card['id']}_{idx}"
                     
-                    # Calculate current owned quantities for this specific printing
                     owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
                     
                     col_img, col_info, col_actions = st.columns([1.5, 2.5, 2])
@@ -192,7 +190,6 @@ else:
                         st.markdown(f"**Regular Price:** ${usd if usd else 'N/A'}")
                         st.markdown(f"**Foil Price:** ${usd_foil if usd_foil else 'N/A'}")
                         
-                        # Display Detailed Collection Ownership
                         valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
                         
                         if valid_owned:
@@ -204,12 +201,11 @@ else:
                                 cond = item.get("condition", "Near Mint")
                                 st.markdown(f"• **{qty}x** {finish} ({cond})")
                     
-                    # COLUMN 3: Quick Add Controls (Option 1)
+                    # COLUMN 3: Quick Add Controls
                     with col_actions:
                         st.write("**Quick Add (Near Mint)**")
                         c_reg, c_foil = st.columns(2)
                         
-                        # Quick Add Nonfoil
                         with c_reg:
                             if st.button("➕ 1x Regular", key=f"qadd_reg_{card_id}", width='stretch'):
                                 add_card_to_library(
@@ -223,7 +219,6 @@ else:
                                 st.toast("Added 1x Regular (Near Mint)!", icon="✅")
                                 st.rerun()
 
-                        # Quick Add Foil
                         with c_foil:
                             if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", width='stretch'):
                                 add_card_to_library(
@@ -237,7 +232,6 @@ else:
                                 st.toast("Added 1x Foil (Near Mint)!", icon="✅")
                                 st.rerun()
 
-                        # Custom Quantity/Condition Popover
                         with st.popover("⚙️ Custom Add...", use_container_width=True):
                             st.caption("Add specific quantities or conditions")
                             custom_finish = st.selectbox("Finish", ["nonfoil", "foil"], key=f"c_fin_{card_id}")
@@ -269,7 +263,6 @@ else:
         
         library_cards = get_user_library(user["id"])
         
-        # Filter out records where total quantity is 0 or less
         active_cards = [card for card in library_cards if card.get("quantity", 0) > 0]
         
         if not active_cards:
@@ -281,12 +274,10 @@ else:
                 item_id = f"{item.get('id', idx)}"
                 scryfall_id = item.get("scryfall_id")
                 
-                # Fetch Scryfall card data by ID
                 card_data = get_card_by_id(scryfall_id) if scryfall_id else None
                 
                 col_img, col_info, col_actions = st.columns([1, 2, 2])
                 
-                # COLUMN 1: Small Image
                 with col_img:
                     if card_data:
                         img_url = get_card_image_url(card_data, size="small")
@@ -294,7 +285,6 @@ else:
                     else:
                         st.caption("No image available")
                 
-                # COLUMN 2: Card Name, Set Name, Quantity/Finish/Condition
                 with col_info:
                     card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
                     st.subheader(card_name)
@@ -311,7 +301,6 @@ else:
                     st.markdown("---")
                     st.markdown(f"• **{qty}x** {finish} ({cond})")
                 
-                # COLUMN 3: Placeholder for upcoming features
                 with col_actions:
                     st.empty()
                 
