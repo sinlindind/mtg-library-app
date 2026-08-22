@@ -18,14 +18,20 @@ st.set_page_config(
 )
 
 # 1. Scryfall Autocomplete API Handler for the searchbox
+@st.cache_data(ttl=1800)
 def search_scryfall_autocomplete(search_term: str) -> list[str]:
     """Fetches autocomplete suggestions from Scryfall as the user types."""
     if not search_term or len(search_term.strip()) < 2:
         return []
     
     url = "https://api.scryfall.com/cards/autocomplete"
+    headers = {
+        "User-Agent": "MTGLibraryApp/1.0",
+        "Accept": "application/json"
+    }
+    
     try:
-        res = requests.get(url, params={"q": search_term}, timeout=3)
+        res = requests.get(url, params={"q": search_term}, headers=headers, timeout=3)
         if res.status_code == 200:
             return res.json().get("data", [])
     except Exception:
@@ -148,7 +154,7 @@ else:
         
         user_library = get_user_library(user["id"])
         
-        # Google-style live searchbox widget
+        # Live autocomplete searchbox widget
         search_query = st_searchbox(
             search_scryfall_autocomplete,
             placeholder="Type a card name (e.g. 'Sol Ring')...",
