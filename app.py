@@ -132,21 +132,32 @@ else:
         
         user_library = get_user_library(user["id"])
         
-        # Native JS Autocomplete Search Box Component
-        search_query = st_searchbox(
+        # 1. Track the last searched query in session state
+        if "last_search_query" not in st.session_state:
+            st.session_state.last_search_query = ""
+
+        # 2. Render Search Box
+        selected_card = st_searchbox(
             search_scryfall_names,
             placeholder="Type a card name (e.g. 'Sol Ring')...",
             key="scryfall_autocomplete_box"
         )
         
-        if search_query and len(search_query.strip()) >= 2:
-            with st.spinner(f"Searching printings for '{search_query}'..."):
-                results = search_cards(search_query.strip())
+        # 3. Update cached search query if the user selected/entered a valid string
+        if selected_card and len(selected_card.strip()) >= 2:
+            st.session_state.last_search_query = selected_card.strip()
+
+        # 4. Use the cached query so clearing the box ('x') keeps current results active
+        active_query = st.session_state.last_search_query
+
+        if active_query:
+            with st.spinner(f"Searching printings for '{active_query}'..."):
+                results = search_cards(active_query)
             
             if not results:
                 st.warning("No cards found matching your query.")
             else:
-                st.success(f"Found **{len(results)}** printings")
+                st.success(f"Found **{len(results)}** printings for **{active_query}**")
                 
                 for idx, card in enumerate(results):
                     card_id = f"{card['id']}_{idx}"
