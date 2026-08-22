@@ -138,12 +138,12 @@ else:
 
     # --- SCREEN 1: SEARCH ---
     if menu_selection == "Search":
-        # Global CSS to trim excessive top padding and whitespace
+        # Targeted CSS to fix top bar collision while maintaining compact spacing
         st.markdown(
             """
             <style>
-                .block-container { padding-top: 1.5rem !important; padding-bottom: 0rem !important; }
-                div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
+                .block-container { padding-top: 3.5rem !important; padding-bottom: 0rem !important; }
+                div[data-testid="stVerticalBlock"] { gap: 0.4rem !important; }
             </style>
             """,
             unsafe_allow_html=True
@@ -180,7 +180,6 @@ else:
             if not results:
                 st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
             else:
-                # Tight, compact summary + sort control header row
                 col_info, col_sort = st.columns([3, 1.2])
                 
                 with col_info:
@@ -206,7 +205,7 @@ else:
                         index=current_idx,
                         key="search_sort_dropdown",
                         on_change=on_sort_change,
-                        label_visibility="collapsed"  # Hides label to save vertical space
+                        label_visibility="collapsed"
                     )
 
                 def parse_price(c):
@@ -229,8 +228,8 @@ else:
                 elif sort_option == "Name (A-Z)":
                     sorted_results.sort(key=lambda x: x.get("name", "").lower())
 
-                # Viewport-friendly scroll box height (520px fits cleanly without pushing past screen footer)
-                results_scroll_area = st.container(height=520)
+                # Height optimized for laptop screens to prevent overflow
+                results_scroll_area = st.container(height=480)
                 with results_scroll_area:
                     for idx, card in enumerate(sorted_results):
                         card_id = f"{card['id']}_{idx}"
