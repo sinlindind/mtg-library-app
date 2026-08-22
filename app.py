@@ -19,28 +19,28 @@ st.set_page_config(
 )
 
 # 1. Custom JavaScript Autocomplete Search Component
-def scryfall_autocomplete_box(key="mtg_search"):
+def scryfall_autocomplete_box():
     """
     Renders an HTML input with a native <datalist> dropdown. 
     Queries Scryfall directly in JS as you type, preserving cursor focus completely.
     Only passes the final selection back to Streamlit on selection/Enter.
     """
-    html_code = f"""
+    html_code = """
     <!DOCTYPE html>
     <html>
     <head>
       <style>
-        body {{
+        body {
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background: transparent;
-        }}
-        .search-container {{
+        }
+        .search-container {
             width: 100%;
             position: relative;
-        }}
-        input {{
+        }
+        input {
             width: 100%;
             padding: 10px 14px;
             font-size: 16px;
@@ -50,11 +50,11 @@ def scryfall_autocomplete_box(key="mtg_search"):
             color: #ffffff;
             box-sizing: border-box;
             outline: none;
-        }}
-        input:focus {{
+        }
+        input:focus {
             border-color: #ff4b4b;
             box-shadow: 0 0 0 1px #ff4b4b;
-        }}
+        }
       </style>
     </head>
     <body>
@@ -70,69 +70,63 @@ def scryfall_autocomplete_box(key="mtg_search"):
       </div>
 
       <script>
-        // Streamlit Component API initialization
-        function sendMessageToStreamlit(value) {{
-            window.parent.postMessage({{
+        function sendMessageToStreamlit(value) {
+            window.parent.postMessage({
                 type: "streamlit:setComponentValue",
                 value: value
-            }}, "*");
-        }}
+            }, "*");
+        }
 
         const input = document.getElementById('mtgInput');
         const datalist = document.getElementById('scryfallList');
         let timer = null;
 
-        // Fetch live suggestions from Scryfall on input
-        input.addEventListener('input', function(e) {{
+        input.addEventListener('input', function(e) {
             const query = e.target.value.trim();
             
-            // Send value back if user picked an exact option from datalist
             const options = Array.from(datalist.options).map(opt => opt.value);
-            if (options.includes(query)) {{
+            if (options.includes(query)) {
                 sendMessageToStreamlit(query);
                 return;
-            }}
+            }
 
-            if (query.length < 2) {{
+            if (query.length < 2) {
                 datalist.innerHTML = '';
                 return;
-            }}
+            }
 
-            // Debounce API calls to prevent flooding Scryfall
             clearTimeout(timer);
-            timer = setTimeout(() => {{
-                fetch(`https://api.scryfall.com/cards/autocomplete?q=${{encodeURIComponent(query)}}`)
+            timer = setTimeout(() => {
+                fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query)}`)
                     .then(res => res.json())
-                    .then(data => {{
-                        if (data && data.data) {{
+                    .then(data => {
+                        if (data && data.data) {
                             datalist.innerHTML = data.data
-                                .map(item => `<option value="${{item}}">`)
+                                .map(item => `<option value="${item}">`)
                                 .join('');
-                        }}
-                    }})
-                    .catch(() => {{}});
-            }}, 150);
-        }});
+                        }
+                    })
+                    .catch(() => {});
+            }, 150);
+        });
 
-        // Trigger search when pressing Enter
-        input.addEventListener('keydown', function(e) {{
-            if (e.key === 'Enter') {{
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
                 sendMessageToStreamlit(input.value.trim());
-            }}
-        }});
+            }
+        });
 
-        // Tell Streamlit how tall this component frame is
-        window.addEventListener('load', () => {{
-            window.parent.postMessage({{
+        window.addEventListener('load', () => {
+            window.parent.postMessage({
                 type: "streamlit:setFrameHeight",
                 height: 50
-            }}, "*");
-        }});
+            }, "*");
+        });
       </script>
     </body>
     </html>
     """
-    return components.html(html_code, height=50, key=key)
+    return components.html(html_code, height=50)
 
 # 2. Dialog Modal for Card Details
 @st.dialog("Card Details", width="large")
