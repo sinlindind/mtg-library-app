@@ -138,17 +138,12 @@ else:
 
     # --- SCREEN 1: SEARCH ---
     if menu_selection == "Search":
-        # Targeted CSS to normalize top margin and enable full-viewport auto-resizing
+        # Targeted CSS to fix top bar collision while maintaining compact spacing
         st.markdown(
             """
             <style>
-                .block-container { padding-top: 3.2rem !important; padding-bottom: 0rem !important; }
-                div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
-                
-                /* Auto-calculates scroll container height to fit user browser screen */
-                div[data-testid="stElementContainer"] > div[data-testid="stVerticalBlockBorderWrapper"] {
-                    height: calc(100vh - 210px) !important;
-                }
+                .block-container { padding-top: 3.5rem !important; padding-bottom: 0rem !important; }
+                div[data-testid="stVerticalBlock"] { gap: 0.4rem !important; }
             </style>
             """,
             unsafe_allow_html=True
@@ -233,8 +228,8 @@ else:
                 elif sort_option == "Name (A-Z)":
                     sorted_results.sort(key=lambda x: x.get("name", "").lower())
 
-                # Container now scales automatically based on CSS rule above
-                results_scroll_area = st.container(height=500)
+                # Height optimized for laptop screens to prevent overflow
+                results_scroll_area = st.container(height=480)
                 with results_scroll_area:
                     for idx, card in enumerate(sorted_results):
                         card_id = f"{card['id']}_{idx}"
@@ -254,17 +249,11 @@ else:
                             
                             st.caption(f"Set: **{set_name}** (`{set_code}`) • Released: {released_date}")
                             
-                            # TCGplayer Hyperlink formatting
                             prices = card.get("prices", {})
                             usd = prices.get("usd")
                             usd_foil = prices.get("usd_foil")
-                            purchase_uris = card.get("purchase_uris", {})
-                            tcg_url = purchase_uris.get("tcgplayer")
-
-                            reg_str = f"[\\${usd}]({tcg_url})" if usd and tcg_url else (f"\\${usd}" if usd else "N/A")
-                            foil_str = f"[\\${usd_foil}]({tcg_url})" if usd_foil and tcg_url else (f"\\${usd_foil}" if usd_foil else "N/A")
-
-                            st.markdown(f"**Price:** Reg: {reg_str} / Foil: {foil_str}")
+                            
+                            st.markdown(f"Reg: \\${usd if usd else 'N/A'} / Foil: \\${usd_foil if usd_foil else 'N/A'}")
                             
                             valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
                             if valid_owned:
