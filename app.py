@@ -44,6 +44,8 @@ if "active_search_results" not in st.session_state:
     st.session_state.active_search_results = []
 if "searchbox_key_counter" not in st.session_state:
     st.session_state.searchbox_key_counter = 0
+if "last_processed_selection" not in st.session_state:
+    st.session_state.last_processed_selection = None
 
 # 3. Handle Verification Link in URL
 query_params = st.query_params
@@ -140,42 +142,45 @@ else:
         
         user_library = get_user_library(user["id"])
         
-        # Initialize default sort order state if not set
         if "active_sort_option" not in st.session_state:
             st.session_state.active_sort_option = "Release Date (Newest First)"
 
-        # --- STICKY SEARCH BOX CONTAINER START ---
-        # Fixed container styling so searchbox stays pinned to top when scrolling
+        # CSS to freeze search container to the top
         st.markdown(
             """
             <style>
-                div[data-testid="stVerticalBlock"] > div:has(div.sticky-searchbox) {
+                div[data-testid="stElementContainer"]:has(#sticky-search-marker) {
                     position: sticky;
-                    top: 2.8rem;
-                    z-index: 999;
+                    top: 2rem;
+                    z-index: 99999;
                     background-color: var(--background-color, #0e1117);
                     padding-top: 0.5rem;
-                    padding-bottom: 1rem;
+                    padding-bottom: 0.8rem;
                 }
             </style>
-            <div class="sticky-searchbox"></div>
             """,
             unsafe_allow_html=True
         )
 
         sticky_container = st.container()
         with sticky_container:
+            st.markdown('<div id="sticky-search-marker"></div>', unsafe_allow_html=True)
             current_search_key = f"scryfall_autocomplete_box_{st.session_state.searchbox_key_counter}"
             search_selection = st_searchbox(
                 search_scryfall_names,
                 placeholder="Type a card name (e.g. 'Sol Ring')...",
                 key=current_search_key
             )
-        # --- STICKY SEARCH BOX CONTAINER END ---
 
-        # Process new selection ONLY when the user chooses a new card
-        if search_selection and len(search_selection.strip()) >= 2:
+        # Process search selection ONLY if it is a NEW user input and not a component reload
+        if (
+            search_selection 
+            and len(search_selection.strip()) >= 2 
+            and search_selection != st.session_state.last_processed_selection
+        ):
             query = search_selection.strip()
+            st.session_state.last_processed_selection = search_selection
+            
             with st.spinner(f"Searching printings for '{query}'..."):
                 results = search_cards(query)
                 st.session_state.active_search_label = query
@@ -196,7 +201,6 @@ else:
                     st.subheader(f"Results for: **{st.session_state.active_search_label}**")
                     st.caption(f"Found **{len(results)}** printings")
 
-                # Callback function to retain sort choice on tab navigation
                 def on_sort_change():
                     st.session_state.active_sort_option = st.session_state.search_sort_dropdown
 
