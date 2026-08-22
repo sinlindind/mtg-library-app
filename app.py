@@ -125,74 +125,61 @@ else:
     st.markdown("""
         <style>
             [data-testid="stSidebarNav"] {display: none;}
+            /* Maximize main content horizontal span */
+            .block-container { 
+                padding-top: 2rem !important; 
+                padding-bottom: 2rem !important;
+                padding-left: 2rem !important;
+                padding-right: 2rem !important;
+                max-width: 98% !important;
+            }
+            div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
         </style>
     """, unsafe_allow_html=True)
 
+    user_library = get_user_library(user["id"])
+
+    # --- SIDEBAR: NAVIGATION & PERMANENT SEARCH ---
     with st.sidebar:
         st.title(f"👤 {user['username']}")
         menu_selection = st.radio("Navigation", options=["Search", "My Library"], index=0)
         st.divider()
+
+        # Place the search box permanently in the fixed sidebar when on the Search view
+        if menu_selection == "Search":
+            st.markdown("### 🔍 Card Search")
+            current_search_key = f"scryfall_box_{st.session_state.searchbox_key_counter}"
+            search_selection = st_searchbox(
+                search_scryfall_names,
+                placeholder="Type card name...",
+                key=current_search_key
+            )
+
+            # Process search trigger
+            if search_selection and len(search_selection.strip()) >= 2:
+                query = search_selection.strip()
+                if query != st.session_state.active_search_label:
+                    with st.spinner("Fetching printings..."):
+                        results = search_cards(query)
+                        st.session_state.active_search_label = query
+                        st.session_state.active_search_results = results
+                        st.session_state.searchbox_key_counter += 1
+                        st.rerun()
+
+            st.divider()
+
         if st.button("Logout", use_container_width=True):
             st.session_state.user = None
             st.rerun()
 
-    # --- SCREEN 1: SEARCH ---
+    # --- SCREEN 1: MAIN SEARCH RESULTS ---
     if menu_selection == "Search":
-        # Dynamic responsive layout styling + Sticky Header controls
-        st.markdown(
-            """
-            <style>
-                /* Maximize page width utilization */
-                .block-container { 
-                    padding-top: 3.5rem !important; 
-                    padding-bottom: 2rem !important;
-                    padding-left: 2rem !important;
-                    padding-right: 2rem !important;
-                    max-width: 98% !important;
-                }
-                
-                div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
-                
-                /* Freeze search input bar at top of window on page scroll */
-                div[data-testid="stVerticalBlock"] > div:has(div.stSearchbox) {
-                    position: sticky !important;
-                    top: 3rem !important;
-                    z-index: 999 !important;
-                    background-color: #0e1117 !important; /* Matches Streamlit Dark Theme */
-                    padding-top: 0.5rem !important;
-                    padding-bottom: 0.5rem !important;
-                }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-
-        user_library = get_user_library(user["id"])
-        
         if "active_sort_option" not in st.session_state:
             st.session_state.active_sort_option = "Release Date (Newest First)"
 
-        # Search Bar Row
-        current_search_key = f"scryfall_box_{st.session_state.searchbox_key_counter}"
-        search_selection = st_searchbox(
-            search_scryfall_names,
-            placeholder="🔍 Search card name (e.g. 'Sol Ring')...",
-            key=current_search_key
-        )
-
-        # Process new search
-        if search_selection and len(search_selection.strip()) >= 2:
-            query = search_selection.strip()
-            if query != st.session_state.active_search_label:
-                with st.spinner(f"Searching printings for '{query}'..."):
-                    results = search_cards(query)
-                    st.session_state.active_search_label = query
-                    st.session_state.active_search_results = results
-                    st.session_state.searchbox_key_counter += 1
-                    st.rerun()
-
-        # Results Section
-        if st.session_state.active_search_label:
+        if not st.session_state.active_search_label:
+            st.info("👈 Use the search bar in the sidebar to find Magic cards.")
+        else:
             results = st.session_state.active_search_results
             
             if not results:
@@ -246,7 +233,7 @@ else:
                 elif sort_option == "Name (A-Z)":
                     sorted_results.sort(key=lambda x: x.get("name", "").lower())
 
-                # Single native flow loop - No inner scroll containers
+                # Clean main page flow using native screen height/width
                 for idx, card in enumerate(sorted_results):
                     card_id = f"{card['id']}_{idx}"
                     owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
@@ -271,6 +258,7 @@ else:
                         purchase_uris = card.get("purchase_uris", {})
                         tcg_url = purchase_uris.get("tcgplayer")
 
+                        # TCGplayer Hyperlinks
                         reg_str = f"[${usd}]({tcg_url})" if usd and float(usd) > 0 and tcg_url else (f"${usd}" if usd else "N/A")
                         foil_str = f"[${usd_foil}]({tcg_url})" if usd_foil and float(usd_foil) > 0 and tcg_url else (f"${usd_foil}" if usd_foil else "N/A")
 
