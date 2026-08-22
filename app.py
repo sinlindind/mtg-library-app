@@ -247,7 +247,7 @@ else:
                             set_code = card.get("set", "").upper()
                             released_date = card.get("released_at", "")
                             
-                            st.caption(f"Set: **{set_name}** (`{set_code}`) • Released: {released_date}")
+                            st.caption(f"Set: **{set_name}**) • Released: {released_date}")
                             
                             prices = card.get("prices", {})
                             usd = prices.get("usd")
