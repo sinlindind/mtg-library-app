@@ -265,8 +265,8 @@ else:
                         tcg_url = purchase_uris.get("tcgplayer")
 
                         # TCGplayer Hyperlinks
-                        reg_str = f"${usd}" if usd else "N/A"
-                        foil_str = f"${usd_foil}" if usd_foil else "N/A"
+                        reg_str = f"\\${usd}" if usd else "N/A"
+                        foil_str = f"\\${usd_foil}" if usd_foil else "N/A"
 
                         st.caption(f"Reg: {reg_str} / Foil: {foil_str}")
                         
