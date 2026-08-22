@@ -158,17 +158,59 @@ else:
                 st.session_state.searchbox_key_counter += 1
                 st.rerun()
 
-        # Display the active search query label and saved search results
+        # Display active search section
         if st.session_state.active_search_label:
-            st.subheader(f"Results for: **{st.session_state.active_search_label}**")
             results = st.session_state.active_search_results
             
             if not results:
-                st.warning("No cards found matching your query.")
+                st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
             else:
-                st.success(f"Found **{len(results)}** printings")
+                # Top header row with result label and sorting selection
+                col_header, col_sort = st.columns([3, 1])
                 
-                for idx, card in enumerate(results):
+                with col_header:
+                    st.subheader(f"Results for: **{st.session_state.active_search_label}**")
+                    st.caption(f"Found **{len(results)}** printings")
+
+                with col_sort:
+                    sort_option = st.selectbox(
+                        "Sort results by",
+                        [
+                            "Release Date (Newest First)",
+                            "Release Date (Oldest First)",
+                            "Price: High to Low",
+                            "Price: Low to High",
+                            "Name (A-Z)"
+                        ],
+                        key="search_sort_option"
+                    )
+
+                # Helper to parse price reliably for numerical sorting
+                def parse_price(c):
+                    prices = c.get("prices", {})
+                    p = prices.get("usd") or prices.get("usd_foil") or "0"
+                    try:
+                        return float(p)
+                    except ValueError:
+                        return 0.0
+
+                # Apply selected sort
+                sorted_results = list(results)
+                if sort_option == "Release Date (Newest First)":
+                    sorted_results.sort(key=lambda x: x.get("released_at", ""), reverse=True)
+                elif sort_option == "Release Date (Oldest First)":
+                    sorted_results.sort(key=lambda x: x.get("released_at", ""))
+                elif sort_option == "Price: High to Low":
+                    sorted_results.sort(key=parse_price, reverse=True)
+                elif sort_option == "Price: Low to High":
+                    sorted_results.sort(key=parse_price)
+                elif sort_option == "Name (A-Z)":
+                    sorted_results.sort(key=lambda x: x.get("name", "").lower())
+
+                st.divider()
+
+                # Render Sorted Results
+                for idx, card in enumerate(sorted_results):
                     card_id = f"{card['id']}_{idx}"
                     owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
                     
@@ -182,7 +224,11 @@ else:
                         st.subheader(card.get("name", "Unknown Card"))
                         set_name = card.get("set_name", "Unknown Set")
                         set_code = card.get("set", "").upper()
+                        released_date = card.get("released_at", "")
+                        
                         st.markdown(f"**Set:** {set_name} (`{set_code}`)")
+                        if released_date:
+                            st.caption(f"Released: {released_date}")
                         
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
