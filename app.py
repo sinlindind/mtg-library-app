@@ -140,6 +140,10 @@ else:
         
         user_library = get_user_library(user["id"])
         
+        # Initialize default sort order state if not set
+        if "active_sort_option" not in st.session_state:
+            st.session_state.active_sort_option = "Release Date (Newest First)"
+
         # Native JS Autocomplete Search Box with dynamic key to auto-clear on select
         current_search_key = f"scryfall_autocomplete_box_{st.session_state.searchbox_key_counter}"
         search_selection = st_searchbox(
@@ -148,7 +152,7 @@ else:
             key=current_search_key
         )
         
-        # Process new selection, save active results, then clear the input box
+        # Process new selection ONLY when the user chooses a new card
         if search_selection and len(search_selection.strip()) >= 2:
             query = search_selection.strip()
             with st.spinner(f"Searching printings for '{query}'..."):
@@ -158,31 +162,41 @@ else:
                 st.session_state.searchbox_key_counter += 1
                 st.rerun()
 
-        # Display active search section
+        # Display persistent search results
         if st.session_state.active_search_label:
             results = st.session_state.active_search_results
             
             if not results:
                 st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
             else:
-                # Top header row with result label and sorting selection
                 col_header, col_sort = st.columns([3, 1])
                 
                 with col_header:
                     st.subheader(f"Results for: **{st.session_state.active_search_label}**")
                     st.caption(f"Found **{len(results)}** printings")
 
+                # Callback function to retain sort choice on tab navigation
+                def on_sort_change():
+                    st.session_state.active_sort_option = st.session_state.search_sort_dropdown
+
                 with col_sort:
+                    sort_options = [
+                        "Release Date (Newest First)",
+                        "Release Date (Oldest First)",
+                        "Price: High to Low",
+                        "Price: Low to High",
+                        "Name (A-Z)"
+                    ]
+                    
+                    # Read index from state to keep dropdown selection across tab switches
+                    current_idx = sort_options.index(st.session_state.active_sort_option) if st.session_state.active_sort_option in sort_options else 0
+                    
                     sort_option = st.selectbox(
                         "Sort results by",
-                        [
-                            "Release Date (Newest First)",
-                            "Release Date (Oldest First)",
-                            "Price: High to Low",
-                            "Price: Low to High",
-                            "Name (A-Z)"
-                        ],
-                        key="search_sort_option"
+                        options=sort_options,
+                        index=current_idx,
+                        key="search_sort_dropdown",
+                        on_change=on_sort_change
                     )
 
                 # Helper to parse price reliably for numerical sorting
@@ -194,7 +208,7 @@ else:
                     except ValueError:
                         return 0.0
 
-                # Apply selected sort
+                # Apply selected sort locally without hitting API again
                 sorted_results = list(results)
                 if sort_option == "Release Date (Newest First)":
                     sorted_results.sort(key=lambda x: x.get("released_at", ""), reverse=True)
