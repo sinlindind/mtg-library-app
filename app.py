@@ -144,14 +144,35 @@ else:
         if "active_sort_option" not in st.session_state:
             st.session_state.active_sort_option = "Release Date (Newest First)"
 
-        # Native JS Autocomplete Search Box with dynamic key to auto-clear on select
-        current_search_key = f"scryfall_autocomplete_box_{st.session_state.searchbox_key_counter}"
-        search_selection = st_searchbox(
-            search_scryfall_names,
-            placeholder="Type a card name (e.g. 'Sol Ring')...",
-            key=current_search_key
+        # --- STICKY SEARCH BOX CONTAINER START ---
+        # Fixed container styling so searchbox stays pinned to top when scrolling
+        st.markdown(
+            """
+            <style>
+                div[data-testid="stVerticalBlock"] > div:has(div.sticky-searchbox) {
+                    position: sticky;
+                    top: 2.8rem;
+                    z-index: 999;
+                    background-color: var(--background-color, #0e1117);
+                    padding-top: 0.5rem;
+                    padding-bottom: 1rem;
+                }
+            </style>
+            <div class="sticky-searchbox"></div>
+            """,
+            unsafe_allow_html=True
         )
-        
+
+        sticky_container = st.container()
+        with sticky_container:
+            current_search_key = f"scryfall_autocomplete_box_{st.session_state.searchbox_key_counter}"
+            search_selection = st_searchbox(
+                search_scryfall_names,
+                placeholder="Type a card name (e.g. 'Sol Ring')...",
+                key=current_search_key
+            )
+        # --- STICKY SEARCH BOX CONTAINER END ---
+
         # Process new selection ONLY when the user chooses a new card
         if search_selection and len(search_selection.strip()) >= 2:
             query = search_selection.strip()
@@ -188,7 +209,6 @@ else:
                         "Name (A-Z)"
                     ]
                     
-                    # Read index from state to keep dropdown selection across tab switches
                     current_idx = sort_options.index(st.session_state.active_sort_option) if st.session_state.active_sort_option in sort_options else 0
                     
                     sort_option = st.selectbox(
@@ -199,7 +219,6 @@ else:
                         on_change=on_sort_change
                     )
 
-                # Helper to parse price reliably for numerical sorting
                 def parse_price(c):
                     prices = c.get("prices", {})
                     p = prices.get("usd") or prices.get("usd_foil") or "0"
@@ -208,7 +227,6 @@ else:
                     except ValueError:
                         return 0.0
 
-                # Apply selected sort locally without hitting API again
                 sorted_results = list(results)
                 if sort_option == "Release Date (Newest First)":
                     sorted_results.sort(key=lambda x: x.get("released_at", ""), reverse=True)
