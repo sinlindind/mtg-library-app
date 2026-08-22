@@ -3,7 +3,7 @@ from services.database import (
     create_user, get_user_by_username, get_user_by_email, verify_user_email,
     add_card_to_library, get_user_library
 )
-from services.scryfall import search_cards, get_card_image_url, get_card_by_id
+from services.scryfall import search_cards, get_card_image_url, get_card_by_id, autocomplete_cards
 from utils.auth import hash_password, verify_password
 from utils.tokens import generate_verification_token, verify_token
 
@@ -132,10 +132,28 @@ else:
         # Fetch entire library once to calculate owned quantities efficiently
         user_library = get_user_library(user["id"])
         
-        search_query = st.text_input(
-            "Search Scryfall", 
-            placeholder="Enter card name or syntax (e.g. 'Sol Ring')"
+        # Smart Search: Live typing input
+        typed_query = st.text_input(
+            "Search MTG Cards", 
+            placeholder="Type at least 2 letters (e.g. 'Sol Ring')"
         )
+
+        # Retrieve autocomplete matches from Scryfall
+        suggestions = autocomplete_cards(typed_query) if len(typed_query.strip()) >= 2 else []
+
+        selected_card = None
+        if suggestions:
+            selected_card = st.selectbox(
+                "Suggestions found (select to refine search):", 
+                options=["-- Use raw typed query --"] + suggestions,
+                index=1 if len(suggestions) == 1 else 0
+            )
+
+        # Determine active search string
+        if selected_card and selected_card != "-- Use raw typed query --":
+            search_query = selected_card
+        else:
+            search_query = typed_query.strip()
 
         if search_query:
             with st.spinner("Searching Scryfall..."):

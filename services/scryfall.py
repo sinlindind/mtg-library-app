@@ -53,7 +53,6 @@ def get_card_image_url(card: dict, size: str = "large") -> str:
             
     return "https://errors.scryfall.com/unknown.jpg"
 
-@st.cache_data(ttl=3600)
 def get_card_by_id(scryfall_id: str) -> dict:
     """Fetches full card JSON payload from Scryfall by its ID."""
     if not scryfall_id:
@@ -72,3 +71,23 @@ def get_card_by_id(scryfall_id: str) -> dict:
         return {}
     except requests.exceptions.RequestException:
         return {}
+    
+def autocomplete_cards(query: str) -> list[str]:
+    """Fetches up to 20 matching card name suggestions from Scryfall."""
+    if not query or len(query.strip()) < 2:
+        return []
+
+    url = "https://api.scryfall.com/cards/autocomplete"
+    params = {"q": query}
+    headers = {
+        "User-Agent": "MTGLibraryApp/1.0",
+        "Accept": "application/json"
+    }
+
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=5)
+        if response.status_code == 200:
+            return response.json().get("data", [])
+        return []
+    except requests.exceptions.RequestException:
+        return []
