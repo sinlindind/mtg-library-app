@@ -1,7 +1,6 @@
 import streamlit as st
-import streamlit.components.v1 as components
-import json
 import requests
+from streamlit_searchbox import st_searchbox
 
 from services.database import (
     create_user, get_user_by_username, get_user_by_email, verify_user_email,
@@ -18,131 +17,27 @@ st.set_page_config(
     initial_sidebar_state="collapsed" if "user" not in st.session_state or st.session_state.user is None else "expanded"
 )
 
-# 1. Custom JavaScript Autocomplete Search Component
-def scryfall_autocomplete_box(key=None):
-    """
-    Renders an HTML input with an embedded JavaScript autocomplete listener.
-    Keeps keyboard focus 100% smooth while typing and passes selected card names back to Streamlit.
-    """
-    html_code = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { margin: 0; padding: 0; font-family: sans-serif; background: transparent; }
-        .search-container { width: 100%; position: relative; }
-        input {
-            width: 100%;
-            padding: 10px 14px;
-            font-size: 16px;
-            border: 1px solid #4a4a4a;
-            border-radius: 8px;
-            background-color: #262730;
-            color: #ffffff;
-            box-sizing: border-box;
-            outline: none;
-        }
-        input:focus { border-color: #ff4b4b; box-shadow: 0 0 0 1px #ff4b4b; }
-      </style>
-    </head>
-    <body>
-      <div class="search-container">
-        <input 
-            type="text" 
-            id="mtgInput" 
-            list="scryfallList" 
-            placeholder="Type a card name (e.g. 'Sol Ring')..." 
-            autocomplete="off"
-        />
-        <datalist id="scryfallList"></datalist>
-      </div>
-
-      <script>
-        const input = document.getElementById('mtgInput');
-        const datalist = document.getElementById('scryfallList');
-        let timer = null;
-
-        function sendToStreamlit(val) {
-            // Standard Streamlit iframe postMessage payload
-            window.parent.postMessage({
-                isStreamlitMessage: true,
-                type: "streamlit:setComponentValue",
-                value: val
-            }, "*");
-        }
-
-        input.addEventListener('input', function(e) {
-            const query = e.target.value.trim();
-            const options = Array.from(datalist.options).map(opt => opt.value);
-            
-            // If user clicks or picks a matched suggestion
-            if (options.includes(query)) {
-                sendToStreamlit(query);
-                return;
-            }
-
-            if (query.length < 2) {
-                datalist.innerHTML = '';
-                return;
-            }
-
-            // Fetch live results without breaking cursor focus
-            clearTimeout(timer);
-            timer = setTimeout(() => {
-                fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query)}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data && data.data) {
-                            datalist.innerHTML = data.data
-                                .map(item => `<option value="${item}">`)
-                                .join('');
-                        }
-                    })
-                    .catch(() => {});
-            }, 150);
-        });
-
-        input.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                sendToStreamlit(input.value.trim());
-            }
-        });
-
-        window.addEventListener('load', () => {
-            window.parent.postMessage({
-                isStreamlitMessage: true,
-                type: "streamlit:setFrameHeight",
-                height: 50
-            }, "*");
-        });
-      </script>
-    </body>
-    </html>
-    """
-    # Using st.components.v1.html without unsupported params
-    res = components.html(html_code, height=50)
-    return res
-
-# 2. Dialog Modal for Card Details
-@st.dialog("Card Details", width="large")
-def show_card_details(card: dict):
-    img_url = get_card_image_url(card, size="large")
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.image(img_url, use_container_width=True)
-    with col2:
-        st.subheader(card.get("name", "Card Details"))
-        st.caption(f"**Set:** {card.get('set_name', '')} (`{card.get('set', '').upper()}`)")
+# 1. Scryfall Autocomplete Function for st_searchbox
+def search_scryfall_names(search_term: str) -> list[str]:
+    """Fetches real-time autocomplete suggestions directly from Scryfall API."""
+    if not search_term or len(search_term.strip()) < 2:
+        return []
     
-    st.divider()
-    st.subheader("Full Scryfall API Payload")
-    st.json(card)
+    try:
+        url = "https://api.scryfall.com/cards/autocomplete"
+        headers = {"User-Agent": "MTGLibraryApp/1.0", "Accept": "application/json"}
+        res = requests.get(url, params={"q": search_term}, headers=headers, timeout=3)
+        if res.status_code == 200:
+            return res.json().get("data", [])
+    except Exception:
+        pass
+    return []
 
-# 3. Initialize Session State
+# 2. Initialize Session State
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# 4. Handle Verification Link in URL
+# 3. Handle Verification Link in URL
 query_params = st.query_params
 if "verify_token" in query_params:
     token = query_params["verify_token"]
@@ -170,7 +65,6 @@ if st.session_state.user is None:
         st.title("🃏 MTG Library App")
         tab_login, tab_register = st.tabs(["Login", "Register"])
 
-        # LOGIN TAB
         with tab_login:
             st.subheader("Login to your account")
             with st.form("login_form", clear_on_submit=False):
@@ -190,7 +84,6 @@ if st.session_state.user is None:
                 else:
                     st.error("Invalid username or password.")
 
-        # REGISTER TAB
         with tab_register:
             st.subheader("Create a new account")
             with st.form("register_form", clear_on_submit=False):
@@ -240,8 +133,12 @@ else:
         user_library = get_user_library(user["id"])
         
         # Native JS Autocomplete Search Box Component
-        search_query = scryfall_autocomplete_box()
-
+        search_query = st_searchbox(
+            search_scryfall_names,
+            placeholder="Type a card name (e.g. 'Sol Ring')...",
+            key="scryfall_autocomplete_box"
+        )
+        
         if search_query and len(search_query.strip()) >= 2:
             with st.spinner(f"Searching printings for '{search_query}'..."):
                 results = search_cards(search_query.strip())
@@ -257,12 +154,10 @@ else:
                     
                     col_img, col_info, col_actions = st.columns([1.5, 2.5, 2])
                     
-                    # COLUMN 1: Image
                     with col_img:
                         img_url = get_card_image_url(card, size="large")
                         st.image(img_url, use_container_width=True)
                     
-                    # COLUMN 2: Details & Library Ownership
                     with col_info:
                         st.subheader(card.get("name", "Unknown Card"))
                         set_name = card.get("set_name", "Unknown Set")
@@ -286,7 +181,6 @@ else:
                                 cond = item.get("condition", "Near Mint")
                                 st.markdown(f"• **{qty}x** {finish} ({cond})")
                     
-                    # COLUMN 3: Quick Add Controls
                     with col_actions:
                         st.write("**Quick Add (Near Mint)**")
                         c_reg, c_foil = st.columns(2)
@@ -347,7 +241,6 @@ else:
         st.title("📦 My Library")
         
         library_cards = get_user_library(user["id"])
-        
         active_cards = [card for card in library_cards if card.get("quantity", 0) > 0]
         
         if not active_cards:
@@ -356,9 +249,7 @@ else:
             st.success(f"Total entries in library: **{len(active_cards)}**")
             
             for idx, item in enumerate(active_cards):
-                item_id = f"{item.get('id', idx)}"
                 scryfall_id = item.get("scryfall_id")
-                
                 card_data = get_card_by_id(scryfall_id) if scryfall_id else None
                 
                 col_img, col_info, col_actions = st.columns([1, 2, 2])
