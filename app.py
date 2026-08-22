@@ -1,130 +1,78 @@
 import streamlit as st
-import requests
 from streamlit_searchbox import st_searchbox
+import requests
+import time
 
-from services.database import (
-    create_user, get_user_by_username, get_user_by_email, verify_user_email,
-    add_card_to_library, get_user_library
-)
-from services.scryfall import search_cards, get_card_image_url, get_card_by_id
-from utils.auth import hash_password, verify_password
-from utils.tokens import generate_verification_token, verify_token
+# --- CONFIG & PAGE SETUP ---
+st.set_page_config(page_title="MTG Card Manager", page_icon="🃏", layout="wide")
 
-st.set_page_config(
-    page_title="MTG Library App", 
-    page_icon="🃏", 
-    layout="wide",
-    initial_sidebar_state="collapsed" if "user" not in st.session_state or st.session_state.user is None else "expanded"
-)
+# --- MOCK / BACKEND FUNCTIONS ---
+def get_user_library(user_id):
+    """Retrieve user's stored library from session state."""
+    if "user_library" not in st.session_state:
+        st.session_state.user_library = []
+    return st.session_state.user_library
 
-# 1. Scryfall Autocomplete Function for st_searchbox
-def search_scryfall_names(search_term: str) -> list[str]:
-    """Fetches real-time autocomplete suggestions directly from Scryfall API."""
-    if not search_term or len(search_term.strip()) < 2:
-        return []
+def add_card_to_library(user_id, scryfall_id, finish, quantity, condition, purchase_price):
+    """Add or update a card in the user's local session library."""
+    library = get_user_library(user_id)
+    # Check if entry already exists
+    for item in library:
+        if item["scryfall_id"] == scryfall_id and item["finish"] == finish and item["condition"] == condition:
+            item["quantity"] += quantity
+            return
     
+    # Otherwise add new item
+    library.append({
+        "scryfall_id": scryfall_id,
+        "finish": finish,
+        "quantity": quantity,
+        "condition": condition,
+        "purchase_price": purchase_price
+    })
+
+def search_scryfall_names(searchterm: str):
+    """Autocomplete function for streamlit-searchbox using Scryfall API."""
+    if not searchterm or len(searchterm.strip()) < 2:
+        return []
     try:
-        url = "https://api.scryfall.com/cards/autocomplete"
-        headers = {"User-Agent": "MTGLibraryApp/1.0", "Accept": "application/json"}
-        res = requests.get(url, params={"q": search_term}, headers=headers, timeout=3)
-        if res.status_code == 200:
-            return res.json().get("data", [])
+        url = f"https://api.scryfall.com/cards/autocomplete?q={searchterm}"
+        res = requests.get(url, timeout=5).json()
+        return res.get("data", [])
     except Exception:
-        pass
-    return []
+        return []
 
-# 2. Initialize Session State
-if "user" not in st.session_state:
-    st.session_state.user = None
+def search_cards(card_name: str):
+    """Fetch card printings from Scryfall by exact/fuzzy name."""
+    try:
+        url = f"https://api.scryfall.com/cards/search?q=exact%3A%22{card_name}%22+unique%3Aprints"
+        res = requests.get(url, timeout=5).json()
+        if res.get("object") == "list":
+            return res.get("data", [])
+        
+        # Fallback to search query if exact match yields no list
+        url = f"https://api.scryfall.com/cards/search?q={card_name}"
+        res = requests.get(url, timeout=5).json()
+        return res.get("data", [])
+    except Exception:
+        return []
 
-# 3. Handle Verification Link in URL
-query_params = st.query_params
-if "verify_token" in query_params:
-    token = query_params["verify_token"]
-    verified_email = verify_token(token)
-    if verified_email:
-        verify_user_email(verified_email)
-        st.success("Your email has been successfully verified! You can now log in.")
-    else:
-        st.error("Invalid or expired verification link.")
-    st.query_params.clear()
+def get_card_image_url(card, size="large"):
+    """Helper to extract card image URL safely across multi-face cards."""
+    if "image_uris" in card:
+        return card["image_uris"].get(size, "")
+    elif "card_faces" in card and len(card["card_faces"]) > 0:
+        return card["card_faces"][0].get("image_uris", {}).get(size, "")
+    return "https://via.placeholder.com/300x418?text=No+Image"
 
-# ==========================================
-# UNAUTHENTICATED VIEW (Login / Register)
-# ==========================================
-if st.session_state.user is None:
-    st.markdown("""
-        <style>
-            [data-testid="stSidebar"] {display: none;}
-            [data-testid="collapsedControl"] {display: none;}
-        </style>
-    """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.title("🃏 MTG Library App")
-        tab_login, tab_register = st.tabs(["Login", "Register"])
+# --- MAIN APPLICATION ---
+def main():
+    # Mock current user context
+    user = {"id": "user_123", "name": "MTG Collector"}
 
-        with tab_login:
-            st.subheader("Login to your account")
-            with st.form("login_form", clear_on_submit=False):
-                login_username = st.text_input("Username", key="login_user")
-                login_password = st.text_input("Password", type="password", key="login_pass")
-                login_submitted = st.form_submit_button("Login", use_container_width=True)
-            
-            if login_submitted:
-                user_record = get_user_by_username(login_username)
-                if user_record:
-                    stored_hash, stored_salt = user_record["password_hash"].split(":")
-                    if verify_password(login_password, stored_hash, stored_salt):
-                        st.session_state.user = user_record
-                        st.rerun()
-                    else:
-                        st.error("Invalid username or password.")
-                else:
-                    st.error("Invalid username or password.")
-
-        with tab_register:
-            st.subheader("Create a new account")
-            with st.form("register_form", clear_on_submit=False):
-                reg_username = st.text_input("Username", key="reg_user")
-                reg_email = st.text_input("Email Address", key="reg_email")
-                reg_password = st.text_input("Password", type="password", key="reg_pass")
-                reg_submitted = st.form_submit_button("Register", use_container_width=True)
-            
-            if reg_submitted:
-                if not reg_username or not reg_email or not reg_password:
-                    st.warning("Please fill in all fields.")
-                elif get_user_by_username(reg_username):
-                    st.error("Username already taken.")
-                elif get_user_by_email(reg_email):
-                    st.error("Email address already registered.")
-                else:
-                    pwd_hash, salt = hash_password(reg_password)
-                    token = generate_verification_token(reg_email)
-                    create_user(reg_username, reg_email, pwd_hash, salt, token)
-                    st.success("Account created successfully!")
-                    st.info(f"Verification token generated: `{token}`")
-
-# ==========================================
-# AUTHENTICATED VIEW (Search & Library)
-# ==========================================
-else:
-    user = st.session_state.user
-
-    st.markdown("""
-        <style>
-            [data-testid="stSidebarNav"] {display: none;}
-        </style>
-    """, unsafe_allow_html=True)
-
-    with st.sidebar:
-        st.title(f"👤 {user['username']}")
-        menu_selection = st.radio("Navigation", options=["Search", "My Library"], index=0)
-        st.divider()
-        if st.button("Logout", use_container_width=True):
-            st.session_state.user = None
-            st.rerun()
+    st.sidebar.title("Navigation")
+    menu_selection = st.sidebar.radio("Go to", ["Search", "My Library"])
 
     # --- SCREEN 1: SEARCH ---
     if menu_selection == "Search":
@@ -132,93 +80,147 @@ else:
         
         user_library = get_user_library(user["id"])
         
-        if "last_search_query" not in st.session_state:
-            st.session_state.last_search_query = ""
+        # Initialize explicit persistent state for query and active search results
+        if "active_search_query" not in st.session_state:
+            st.session_state.active_search_query = ""
+        if "active_search_results" not in st.session_state:
+            st.session_state.active_search_results = []
 
-        # Render Search Box
-        selected_card = st_searchbox(
-            search_scryfall_names,
-            placeholder="Type a card name (e.g. 'Sol Ring')...",
-            key="scryfall_autocomplete_box"
-        )
+        col_search, col_clear = st.columns([5, 1])
 
-        # Inject JavaScript to automatically re-focus the input box when 'x' (clear) is clicked
-        st.components.v1.html(
-            """
-            <script>
-            function focusSearchBox() {
-                const iframes = parent.document.querySelectorAll('iframe');
-                iframes.forEach(iframe => {
-                    try {
-                        // Locate the searchbox input inside the component iframe
-                        const input = iframe.contentDocument.querySelector('input');
-                        const clearBtn = iframe.contentDocument.querySelector('.clear-icon, [data-testid="clear-button"], button');
-                        
-                        if (clearBtn && !clearBtn.dataset.focusBound) {
-                            clearBtn.dataset.focusBound = "true";
-                            clearBtn.addEventListener('click', () => {
-                                setTimeout(() => { if (input) input.focus(); }, 50);
-                            });
-                        }
-                    } catch(e) {}
-                });
-            }
-            // Poll briefly to attach listener once component mounts
-            setInterval(focusSearchBox, 300);
-            </script>
-            """,
-            height=0
-        )
-        
-        # Update cached query on selection
+        with col_search:
+            # Native autocomplete searchbox
+            selected_card = st_searchbox(
+                search_scryfall_names,
+                placeholder="Type a card name (e.g. 'Sol Ring')...",
+                key="scryfall_autocomplete_box"
+            )
+
+        with col_clear:
+            # Custom clear button that explicitly resets persistent search state
+            if st.button("🗑️ Clear", key="clear_search_btn", use_container_width=True):
+                st.session_state.active_search_query = ""
+                st.session_state.active_search_results = []
+                st.rerun()
+
+        # Update cache ONLY when a valid selection is made
         if selected_card and len(selected_card.strip()) >= 2:
-            st.session_state.last_search_query = selected_card.strip()
+            query = selected_card.strip()
+            if query != st.session_state.active_search_query:
+                with st.spinner(f"Searching printings for '{query}'..."):
+                    results = search_cards(query)
+                    st.session_state.active_search_query = query
+                    st.session_state.active_search_results = results
 
-        # Use cached query to preserve results when clear 'x' is clicked
-        active_query = st.session_state.last_search_query
+        # Always render cached results if present
+        results = st.session_state.active_search_results
+        active_query = st.session_state.active_search_query
+
+        if active_query:
+            if not results:
+                st.warning(f"No cards found matching '{active_query}'.")
+            else:
+                st.success(f"Found **{len(results)}** printings for **{active_query}**")
+                
+                for idx, card in enumerate(results):
+                    card_id = f"{card['id']}_{idx}"
+                    owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
+                    
+                    col_img, col_info, col_actions = st.columns([1.5, 2.5, 2])
+                    
+                    with col_img:
+                        img_url = get_card_image_url(card, size="large")
+                        st.image(img_url, use_container_width=True)
+                    
+                    with col_info:
+                        st.subheader(card.get("name", "Unknown Card"))
+                        set_name = card.get("set_name", "Unknown Set")
+                        set_code = card.get("set", "").upper()
+                        st.markdown(f"**Set:** {set_name} (`{set_code}`)")
+                        
+                        prices = card.get("prices", {})
+                        usd = prices.get("usd")
+                        usd_foil = prices.get("usd_foil")
+                        
+                        st.markdown(f"**Regular Price:** ${usd if usd else 'N/A'}")
+                        st.markdown(f"**Foil Price:** ${usd_foil if usd_foil else 'N/A'}")
+                        
+                        valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
+                        if valid_owned:
+                            st.markdown("---")
+                            st.markdown("**In Library:**")
+                            for item in valid_owned:
+                                qty = item.get("quantity")
+                                finish = item.get("finish", "nonfoil").capitalize()
+                                cond = item.get("condition", "Near Mint")
+                                st.markdown(f"• **{qty}x** {finish} ({cond})")
+                    
+                    with col_actions:
+                        st.write("**Quick Add (Near Mint)**")
+                        c_reg, c_foil = st.columns(2)
+                        
+                        with c_reg:
+                            if st.button("➕ 1x Regular", key=f"qadd_reg_{card_id}", use_container_width=True):
+                                add_card_to_library(
+                                    user_id=user["id"],
+                                    scryfall_id=card["id"],
+                                    finish="nonfoil",
+                                    quantity=1,
+                                    condition="Near Mint",
+                                    purchase_price=float(usd) if usd else None
+                                )
+                                st.toast("Added 1x Regular (Near Mint)!", icon="✅")
+                                st.rerun()
+
+                        with c_foil:
+                            if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
+                                add_card_to_library(
+                                    user_id=user["id"],
+                                    scryfall_id=card["id"],
+                                    finish="foil",
+                                    quantity=1,
+                                    condition="Near Mint",
+                                    purchase_price=float(usd_foil) if usd_foil else None
+                                )
+                                st.toast("Added 1x Foil (Near Mint)!", icon="✅")
+                                st.rerun()
+
+                        with st.popover("⚙️ Custom Add...", use_container_width=True):
+                            st.caption("Add specific quantities or conditions")
+                            custom_finish = st.selectbox("Finish", ["nonfoil", "foil"], key=f"c_fin_{card_id}")
+                            custom_qty = st.number_input("Quantity", min_value=1, value=1, step=1, key=f"c_qty_{card_id}")
+                            custom_cond = st.selectbox(
+                                "Condition", 
+                                ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
+                                key=f"c_cond_{card_id}"
+                            )
+                            
+                            if st.button("Add Custom Entry", key=f"c_btn_{card_id}", use_container_width=True):
+                                price_val = usd_foil if custom_finish == "foil" else usd
+                                add_card_to_library(
+                                    user_id=user["id"],
+                                    scryfall_id=card["id"],
+                                    finish=custom_finish,
+                                    quantity=custom_qty,
+                                    condition=custom_cond,
+                                    purchase_price=float(price_val) if price_val else None
+                                )
+                                st.toast(f"Added {custom_qty}x {custom_finish.capitalize()}!", icon="✅")
+                                st.rerun()
+
+                    st.divider()
 
     # --- SCREEN 2: MY LIBRARY ---
     elif menu_selection == "My Library":
-        st.title("📦 My Library")
+        st.title("📚 My Library")
+        library = get_user_library(user["id"])
         
-        library_cards = get_user_library(user["id"])
-        active_cards = [card for card in library_cards if card.get("quantity", 0) > 0]
-        
-        if not active_cards:
-            st.info("Your library is currently empty. Use Search to add cards!")
+        if not library:
+            st.info("Your library is empty. Use the Search tab to add cards!")
         else:
-            st.success(f"Total entries in library: **{len(active_cards)}**")
-            
-            for idx, item in enumerate(active_cards):
-                scryfall_id = item.get("scryfall_id")
-                card_data = get_card_by_id(scryfall_id) if scryfall_id else None
-                
-                col_img, col_info, col_actions = st.columns([1, 2, 2])
-                
-                with col_img:
-                    if card_data:
-                        img_url = get_card_image_url(card_data, size="small")
-                        st.image(img_url, width=150)
-                    else:
-                        st.caption("No image available")
-                
-                with col_info:
-                    card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
-                    st.subheader(card_name)
-                    
-                    if card_data:
-                        set_name = card_data.get("set_name", "Unknown Set")
-                        set_code = card_data.get("set", "").upper()
-                        st.markdown(f"**Set:** {set_name} (`{set_code}`)")
-                    
-                    qty = item.get("quantity", 0)
-                    finish = item.get("finish", "nonfoil").capitalize()
-                    cond = item.get("condition", "Near Mint")
-                    
-                    st.markdown("---")
-                    st.markdown(f"• **{qty}x** {finish} ({cond})")
-                
-                with col_actions:
-                    st.empty()
-                
-                st.divider()
+            st.write(f"Total Unique Entries: **{len(library)}**")
+            for idx, entry in enumerate(library):
+                st.write(f"**Card ID:** `{entry['scryfall_id']}` | **Qty:** {entry['quantity']} | **Finish:** {entry['finish']} | **Condition:** {entry['condition']}")
+
+if __name__ == "__main__":
+    main()
