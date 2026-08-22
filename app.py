@@ -253,7 +253,7 @@ else:
                             usd = prices.get("usd")
                             usd_foil = prices.get("usd_foil")
                             
-                            st.markdown(f"Reg: \\${usd if usd else 'N/A'} / Foil: \\${usd_foil if usd_foil else 'N/A'}")
+                            st.caption(f"Reg: \\${usd if usd else 'N/A'} / Foil: \\${usd_foil if usd_foil else 'N/A'}")
                             
                             valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
                             if valid_owned:
