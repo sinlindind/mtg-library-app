@@ -125,13 +125,18 @@ else:
     st.markdown("""
         <style>
             [data-testid="stSidebarNav"] {display: none;}
-            /* Maximize main content horizontal span */
+            /* Maximize width and clear top header overlay */
             .block-container { 
-                padding-top: 2rem !important; 
+                padding-top: 4rem !important; 
                 padding-bottom: 2rem !important;
                 padding-left: 2rem !important;
                 padding-right: 2rem !important;
                 max-width: 98% !important;
+            }
+            /* Hide Streamlit top header gradient/overlay that clips elements */
+            header[data-testid="stHeader"] {
+                background: transparent !important;
+                z-index: 1 !important;
             }
             div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
         </style>
@@ -145,7 +150,7 @@ else:
         menu_selection = st.radio("Navigation", options=["Search", "My Library"], index=0)
         st.divider()
 
-        # Place the search box permanently in the fixed sidebar when on the Search view
+        # Search bar resides permanently in the sticky sidebar when active
         if menu_selection == "Search":
             st.markdown("### 🔍 Card Search")
             current_search_key = f"scryfall_box_{st.session_state.searchbox_key_counter}"
@@ -185,7 +190,7 @@ else:
             if not results:
                 st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
             else:
-                col_info, col_sort = st.columns([3, 1.2])
+                col_info, col_sort = st.columns([2.5, 1.5], vertical_alignment="center")
                 
                 with col_info:
                     st.markdown(f"### **{st.session_state.active_search_label}** `({len(results)} printings)`")
@@ -233,7 +238,7 @@ else:
                 elif sort_option == "Name (A-Z)":
                     sorted_results.sort(key=lambda x: x.get("name", "").lower())
 
-                # Clean main page flow using native screen height/width
+                # Single native scroll flow (no inner scrollboxes)
                 for idx, card in enumerate(sorted_results):
                     card_id = f"{card['id']}_{idx}"
                     owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
