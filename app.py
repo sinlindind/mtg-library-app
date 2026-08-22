@@ -132,120 +132,50 @@ else:
         
         user_library = get_user_library(user["id"])
         
-        # 1. Track the last searched query in session state
         if "last_search_query" not in st.session_state:
             st.session_state.last_search_query = ""
 
-        # 2. Render Search Box
+        # Render Search Box
         selected_card = st_searchbox(
             search_scryfall_names,
             placeholder="Type a card name (e.g. 'Sol Ring')...",
             key="scryfall_autocomplete_box"
         )
+
+        # Inject JavaScript to automatically re-focus the input box when 'x' (clear) is clicked
+        st.components.v1.html(
+            """
+            <script>
+            function focusSearchBox() {
+                const iframes = parent.document.querySelectorAll('iframe');
+                iframes.forEach(iframe => {
+                    try {
+                        // Locate the searchbox input inside the component iframe
+                        const input = iframe.contentDocument.querySelector('input');
+                        const clearBtn = iframe.contentDocument.querySelector('.clear-icon, [data-testid="clear-button"], button');
+                        
+                        if (clearBtn && !clearBtn.dataset.focusBound) {
+                            clearBtn.dataset.focusBound = "true";
+                            clearBtn.addEventListener('click', () => {
+                                setTimeout(() => { if (input) input.focus(); }, 50);
+                            });
+                        }
+                    } catch(e) {}
+                });
+            }
+            // Poll briefly to attach listener once component mounts
+            setInterval(focusSearchBox, 300);
+            </script>
+            """,
+            height=0
+        )
         
-        # 3. Update cached search query if the user selected/entered a valid string
+        # Update cached query on selection
         if selected_card and len(selected_card.strip()) >= 2:
             st.session_state.last_search_query = selected_card.strip()
 
-        # 4. Use the cached query so clearing the box ('x') keeps current results active
+        # Use cached query to preserve results when clear 'x' is clicked
         active_query = st.session_state.last_search_query
-
-        if active_query:
-            with st.spinner(f"Searching printings for '{active_query}'..."):
-                results = search_cards(active_query)
-            
-            if not results:
-                st.warning("No cards found matching your query.")
-            else:
-                st.success(f"Found **{len(results)}** printings for **{active_query}**")
-                
-                for idx, card in enumerate(results):
-                    card_id = f"{card['id']}_{idx}"
-                    owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
-                    
-                    col_img, col_info, col_actions = st.columns([1.5, 2.5, 2])
-                    
-                    with col_img:
-                        img_url = get_card_image_url(card, size="large")
-                        st.image(img_url, use_container_width=True)
-                    
-                    with col_info:
-                        st.subheader(card.get("name", "Unknown Card"))
-                        set_name = card.get("set_name", "Unknown Set")
-                        set_code = card.get("set", "").upper()
-                        st.markdown(f"**Set:** {set_name} (`{set_code}`)")
-                        
-                        prices = card.get("prices", {})
-                        usd = prices.get("usd")
-                        usd_foil = prices.get("usd_foil")
-                        
-                        st.markdown(f"**Regular Price:** ${usd if usd else 'N/A'}")
-                        st.markdown(f"**Foil Price:** ${usd_foil if usd_foil else 'N/A'}")
-                        
-                        valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
-                        if valid_owned:
-                            st.markdown("---")
-                            st.markdown("**In Library:**")
-                            for item in valid_owned:
-                                qty = item.get("quantity")
-                                finish = item.get("finish", "nonfoil").capitalize()
-                                cond = item.get("condition", "Near Mint")
-                                st.markdown(f"• **{qty}x** {finish} ({cond})")
-                    
-                    with col_actions:
-                        st.write("**Quick Add (Near Mint)**")
-                        c_reg, c_foil = st.columns(2)
-                        
-                        with c_reg:
-                            if st.button("➕ 1x Regular", key=f"qadd_reg_{card_id}", use_container_width=True):
-                                add_card_to_library(
-                                    user_id=user["id"],
-                                    scryfall_id=card["id"],
-                                    finish="nonfoil",
-                                    quantity=1,
-                                    condition="Near Mint",
-                                    purchase_price=float(usd) if usd else None
-                                )
-                                st.toast("Added 1x Regular (Near Mint)!", icon="✅")
-                                st.rerun()
-
-                        with c_foil:
-                            if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
-                                add_card_to_library(
-                                    user_id=user["id"],
-                                    scryfall_id=card["id"],
-                                    finish="foil",
-                                    quantity=1,
-                                    condition="Near Mint",
-                                    purchase_price=float(usd_foil) if usd_foil else None
-                                )
-                                st.toast("Added 1x Foil (Near Mint)!", icon="✅")
-                                st.rerun()
-
-                        with st.popover("⚙️ Custom Add...", use_container_width=True):
-                            st.caption("Add specific quantities or conditions")
-                            custom_finish = st.selectbox("Finish", ["nonfoil", "foil"], key=f"c_fin_{card_id}")
-                            custom_qty = st.number_input("Quantity", min_value=1, value=1, step=1, key=f"c_qty_{card_id}")
-                            custom_cond = st.selectbox(
-                                "Condition", 
-                                ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
-                                key=f"c_cond_{card_id}"
-                            )
-                            
-                            if st.button("Add Custom Entry", key=f"c_btn_{card_id}", use_container_width=True):
-                                price_val = usd_foil if custom_finish == "foil" else usd
-                                add_card_to_library(
-                                    user_id=user["id"],
-                                    scryfall_id=card["id"],
-                                    finish=custom_finish,
-                                    quantity=custom_qty,
-                                    condition=custom_cond,
-                                    purchase_price=float(price_val) if price_val else None
-                                )
-                                st.toast(f"Added {custom_qty}x {custom_finish.capitalize()}!", icon="✅")
-                                st.rerun()
-
-                    st.divider()
 
     # --- SCREEN 2: MY LIBRARY ---
     elif menu_selection == "My Library":
