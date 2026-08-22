@@ -6,23 +6,27 @@ SCRYFALL_SEARCH_URL = "https://api.scryfall.com/cards/search"
 @st.cache_data(ttl=3600)
 def search_cards(card_name: str) -> list:
     """Fetch card printings from Scryfall using strict phrase matching."""
+    base_url = "https://api.scryfall.com/cards/search"
+    
+    # Scryfall strictly requires a custom User-Agent header
+    headers = {
+        "User-Agent": "MTGLibraryApp/1.0",
+        "Accept": "application/json"
+    }
+    
     try:
-        base_url = "https://api.scryfall.com/cards/search"
-        
         # Attempt 1: Strict exact match for all unique printings
         exact_query = f'exact:"{card_name}" unique:prints'
-        res = requests.get(base_url, params={"q": exact_query}, timeout=5)
+        res = requests.get(base_url, params={"q": exact_query}, headers=headers, timeout=5)
         
         if res.status_code == 200:
             data = res.json()
             if data.get("object") == "list" and data.get("data"):
                 return data.get("data")
         
-        # Attempt 2: Phrase fallback 
-        # Wrapping in quotes forces Scryfall to look for the exact phrase "sol ring", 
-        # preventing it from splitting into "sol" and "ring".
+        # Attempt 2: Strict phrase fallback if exact tag fails
         phrase_query = f'"{card_name}" unique:prints'
-        res_fallback = requests.get(base_url, params={"q": phrase_query}, timeout=5)
+        res_fallback = requests.get(base_url, params={"q": phrase_query}, headers=headers, timeout=5)
         
         if res_fallback.status_code == 200:
             return res_fallback.json().get("data", [])
