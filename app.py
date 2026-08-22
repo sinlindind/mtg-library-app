@@ -1,5 +1,6 @@
 import streamlit as st
-from streamlit_searchbox import st_searchbox
+import streamlit.components.v1 as components
+import json
 import requests
 
 from services.database import (
@@ -17,26 +18,121 @@ st.set_page_config(
     initial_sidebar_state="collapsed" if "user" not in st.session_state or st.session_state.user is None else "expanded"
 )
 
-# 1. Scryfall Autocomplete API Handler for the searchbox
-@st.cache_data(ttl=1800)
-def search_scryfall_autocomplete(search_term: str) -> list[str]:
-    """Fetches autocomplete suggestions from Scryfall as the user types."""
-    if not search_term or len(search_term.strip()) < 2:
-        return []
-    
-    url = "https://api.scryfall.com/cards/autocomplete"
-    headers = {
-        "User-Agent": "MTGLibraryApp/1.0",
-        "Accept": "application/json"
-    }
-    
-    try:
-        res = requests.get(url, params={"q": search_term}, headers=headers, timeout=3)
-        if res.status_code == 200:
-            return res.json().get("data", [])
-    except Exception:
-        pass
-    return []
+# 1. Custom JavaScript Autocomplete Search Component
+def scryfall_autocomplete_box(key="mtg_search"):
+    """
+    Renders an HTML input with a native <datalist> dropdown. 
+    Queries Scryfall directly in JS as you type, preserving cursor focus completely.
+    Only passes the final selection back to Streamlit on selection/Enter.
+    """
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body {{
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: transparent;
+        }}
+        .search-container {{
+            width: 100%;
+            position: relative;
+        }}
+        input {{
+            width: 100%;
+            padding: 10px 14px;
+            font-size: 16px;
+            border: 1px solid #4a4a4a;
+            border-radius: 8px;
+            background-color: #262730;
+            color: #ffffff;
+            box-sizing: border-box;
+            outline: none;
+        }}
+        input:focus {{
+            border-color: #ff4b4b;
+            box-shadow: 0 0 0 1px #ff4b4b;
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="search-container">
+        <input 
+            type="text" 
+            id="mtgInput" 
+            list="scryfallList" 
+            placeholder="Type a card name (e.g. 'Sol Ring')..." 
+            autocomplete="off"
+        />
+        <datalist id="scryfallList"></datalist>
+      </div>
+
+      <script>
+        // Streamlit Component API initialization
+        function sendMessageToStreamlit(value) {{
+            window.parent.postMessage({{
+                type: "streamlit:setComponentValue",
+                value: value
+            }}, "*");
+        }}
+
+        const input = document.getElementById('mtgInput');
+        const datalist = document.getElementById('scryfallList');
+        let timer = null;
+
+        // Fetch live suggestions from Scryfall on input
+        input.addEventListener('input', function(e) {{
+            const query = e.target.value.trim();
+            
+            // Send value back if user picked an exact option from datalist
+            const options = Array.from(datalist.options).map(opt => opt.value);
+            if (options.includes(query)) {{
+                sendMessageToStreamlit(query);
+                return;
+            }}
+
+            if (query.length < 2) {{
+                datalist.innerHTML = '';
+                return;
+            }}
+
+            // Debounce API calls to prevent flooding Scryfall
+            clearTimeout(timer);
+            timer = setTimeout(() => {{
+                fetch(`https://api.scryfall.com/cards/autocomplete?q=${{encodeURIComponent(query)}}`)
+                    .then(res => res.json())
+                    .then(data => {{
+                        if (data && data.data) {{
+                            datalist.innerHTML = data.data
+                                .map(item => `<option value="${{item}}">`)
+                                .join('');
+                        }}
+                    }})
+                    .catch(() => {{}});
+            }}, 150);
+        }});
+
+        // Trigger search when pressing Enter
+        input.addEventListener('keydown', function(e) {{
+            if (e.key === 'Enter') {{
+                sendMessageToStreamlit(input.value.trim());
+            }}
+        }});
+
+        // Tell Streamlit how tall this component frame is
+        window.addEventListener('load', () => {{
+            window.parent.postMessage({{
+                type: "streamlit:setFrameHeight",
+                height: 50
+            }}, "*");
+        }});
+      </script>
+    </body>
+    </html>
+    """
+    return components.html(html_code, height=50, key=key)
 
 # 2. Dialog Modal for Card Details
 @st.dialog("Card Details", width="large")
@@ -44,7 +140,7 @@ def show_card_details(card: dict):
     img_url = get_card_image_url(card, size="large")
     col1, col2 = st.columns([1, 2])
     with col1:
-        st.image(img_url, width='stretch')
+        st.image(img_url, use_container_width=True)
     with col2:
         st.subheader(card.get("name", "Card Details"))
         st.caption(f"**Set:** {card.get('set_name', '')} (`{card.get('set', '').upper()}`)")
@@ -91,7 +187,7 @@ if st.session_state.user is None:
             with st.form("login_form", clear_on_submit=False):
                 login_username = st.text_input("Username", key="login_user")
                 login_password = st.text_input("Password", type="password", key="login_pass")
-                login_submitted = st.form_submit_button("Login", width='stretch')
+                login_submitted = st.form_submit_button("Login", use_container_width=True)
             
             if login_submitted:
                 user_record = get_user_by_username(login_username)
@@ -112,7 +208,7 @@ if st.session_state.user is None:
                 reg_username = st.text_input("Username", key="reg_user")
                 reg_email = st.text_input("Email Address", key="reg_email")
                 reg_password = st.text_input("Password", type="password", key="reg_pass")
-                reg_submitted = st.form_submit_button("Register", width='stretch')
+                reg_submitted = st.form_submit_button("Register", use_container_width=True)
             
             if reg_submitted:
                 if not reg_username or not reg_email or not reg_password:
@@ -144,7 +240,7 @@ else:
         st.title(f"👤 {user['username']}")
         menu_selection = st.radio("Navigation", options=["Search", "My Library"], index=0)
         st.divider()
-        if st.button("Logout", width='stretch'):
+        if st.button("Logout", use_container_width=True):
             st.session_state.user = None
             st.rerun()
 
@@ -153,42 +249,13 @@ else:
         st.title("🔍 MTG Card Search")
         
         user_library = get_user_library(user["id"])
-
-        # Native Browser Datalist + Search Component
-        search_query = st.text_input(
-            "Search MTG Cards",
-            placeholder="Start typing a card name (e.g. 'Sol Ring')...",
-            key="native_search_input"
-        )
-
-        # Retrieve live suggestions
-        suggestions = search_scryfall_autocomplete(search_query) if len(search_query.strip()) >= 2 else []
-
-        # Inject HTML Datalist directly into the browser DOM so focus is never lost
-        if suggestions:
-            options_html = "".join([f'<option value="{s}">' for s in suggestions])
-            st.components.v1.html(
-                f"""
-                <script>
-                    const input = window.parent.document.querySelector('input[data-testid="stTextInput"]');
-                    if (input) {{
-                        let datalist = window.parent.document.getElementById('scryfall-datalist');
-                        if (!datalist) {{
-                            datalist = window.parent.document.createElement('datalist');
-                            datalist.id = 'scryfall-datalist';
-                            window.parent.document.body.appendChild(datalist);
-                        }}
-                        datalist.innerHTML = `{options_html}`;
-                        input.setAttribute('list', 'scryfall-datalist');
-                    }}
-                </script>
-                """,
-                height=0
-            )
+        
+        # Native JS Autocomplete Search Box Component
+        search_query = scryfall_autocomplete_box(key="main_mtg_search")
 
         if search_query and len(search_query.strip()) >= 2:
             with st.spinner(f"Searching printings for '{search_query}'..."):
-                results = search_cards(search_query)
+                results = search_cards(search_query.strip())
             
             if not results:
                 st.warning("No cards found matching your query.")
