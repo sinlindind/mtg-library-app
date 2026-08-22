@@ -125,7 +125,7 @@ else:
             st.session_state.user = None
             st.rerun()
 
-   # --- SCREEN 1: SEARCH ---
+    # --- SCREEN 1: SEARCH ---
     if menu_selection == "Search":
         st.title("🔍 MTG Card Search")
         
@@ -152,10 +152,8 @@ else:
                     
                     # Calculate current owned quantities for this specific printing
                     owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
-                    owned_reg = sum(item.get("quantity", 0) for item in owned_entries if item.get("finish") == "nonfoil")
-                    owned_foil = sum(item.get("quantity", 0) for item in owned_entries if item.get("finish") == "foil")
                     
-                    col_img, col_info, col_actions = st.columns([2, 2, 2])
+                    col_img, col_info, col_actions = st.columns([1.5, 2.5, 2])
                     
                     # COLUMN 1: Image
                     with col_img:
@@ -188,56 +186,61 @@ else:
                                 cond = item.get("condition", "Near Mint")
                                 st.markdown(f"• **{qty}x** {finish} ({cond})")
                     
-                    # COLUMN 3: Add to Library Controls
+                    # COLUMN 3: Quick Add Controls (Option 1)
                     with col_actions:
-                        st.write("**Add to Library**")
+                        st.write("**Quick Add (Near Mint)**")
                         c_reg, c_foil = st.columns(2)
+                        
+                        # Quick Add Nonfoil
                         with c_reg:
-                            qty_reg = st.number_input(
-                                "Reg Qty", 
-                                min_value=0, 
-                                value=0, 
-                                step=1, 
-                                key=f"row_reg_{card_id}"
-                            )
+                            if st.button("➕ 1x Regular", key=f"qadd_reg_{card_id}", width='stretch'):
+                                add_card_to_library(
+                                    user_id=user["id"],
+                                    scryfall_id=card["id"],
+                                    finish="nonfoil",
+                                    quantity=1,
+                                    condition="Near Mint",
+                                    purchase_price=float(usd) if usd else None
+                                )
+                                st.toast("Added 1x Regular (Near Mint)!", icon="✅")
+                                st.rerun()
+
+                        # Quick Add Foil
                         with c_foil:
-                            qty_foil = st.number_input(
-                                "Foil Qty", 
-                                min_value=0, 
-                                value=0, 
-                                step=1, 
-                                key=f"row_foil_{card_id}"
+                            if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", width='stretch'):
+                                add_card_to_library(
+                                    user_id=user["id"],
+                                    scryfall_id=card["id"],
+                                    finish="foil",
+                                    quantity=1,
+                                    condition="Near Mint",
+                                    purchase_price=float(usd_foil) if usd_foil else None
+                                )
+                                st.toast("Added 1x Foil (Near Mint)!", icon="✅")
+                                st.rerun()
+
+                        # Custom Quantity/Condition Popover
+                        with st.popover("⚙️ Custom Add...", use_container_width=True):
+                            st.caption("Add specific quantities or conditions")
+                            custom_finish = st.selectbox("Finish", ["nonfoil", "foil"], key=f"c_fin_{card_id}")
+                            custom_qty = st.number_input("Quantity", min_value=1, value=1, step=1, key=f"c_qty_{card_id}")
+                            custom_cond = st.selectbox(
+                                "Condition", 
+                                ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
+                                key=f"c_cond_{card_id}"
                             )
-                        
-                        condition = st.selectbox(
-                            "Condition", 
-                            options=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
-                            key=f"row_cond_{card_id}"
-                        )
-                        
-                        if st.button("➕ Add to Library", key=f"row_add_{card_id}", width='stretch'):
-                            if qty_reg == 0 and qty_foil == 0:
-                                st.warning("Enter a quantity greater than 0.")
-                            else:
-                                if qty_reg > 0:
-                                    add_card_to_library(
-                                        user_id=user["id"],
-                                        scryfall_id=card["id"],
-                                        finish="nonfoil",
-                                        quantity=qty_reg,
-                                        condition=condition,
-                                        purchase_price=float(usd) if usd else None
-                                    )
-                                if qty_foil > 0:
-                                    add_card_to_library(
-                                        user_id=user["id"],
-                                        scryfall_id=card["id"],
-                                        finish="foil",
-                                        quantity=qty_foil,
-                                        condition=condition,
-                                        purchase_price=float(usd_foil) if usd_foil else None
-                                    )
-                                st.toast("Library updated!", icon="✅")
+                            
+                            if st.button("Add Custom Entry", key=f"c_btn_{card_id}", width='stretch'):
+                                price_val = usd_foil if custom_finish == "foil" else usd
+                                add_card_to_library(
+                                    user_id=user["id"],
+                                    scryfall_id=card["id"],
+                                    finish=custom_finish,
+                                    quantity=custom_qty,
+                                    condition=custom_cond,
+                                    purchase_price=float(price_val) if price_val else None
+                                )
+                                st.toast(f"Added {custom_qty}x {custom_finish.capitalize()}!", icon="✅")
                                 st.rerun()
 
                     st.divider()
