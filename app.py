@@ -19,27 +19,18 @@ st.set_page_config(
 )
 
 # 1. Custom JavaScript Autocomplete Search Component
-def scryfall_autocomplete_box():
+def scryfall_autocomplete_box(key=None):
     """
-    Renders an HTML input with a native <datalist> dropdown. 
-    Queries Scryfall directly in JS as you type, preserving cursor focus completely.
-    Only passes the final selection back to Streamlit on selection/Enter.
+    Renders an HTML input with an embedded JavaScript autocomplete listener.
+    Keeps keyboard focus 100% smooth while typing and passes selected card names back to Streamlit.
     """
     html_code = """
     <!DOCTYPE html>
     <html>
     <head>
       <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: transparent;
-        }
-        .search-container {
-            width: 100%;
-            position: relative;
-        }
+        body { margin: 0; padding: 0; font-family: sans-serif; background: transparent; }
+        .search-container { width: 100%; position: relative; }
         input {
             width: 100%;
             padding: 10px 14px;
@@ -51,10 +42,7 @@ def scryfall_autocomplete_box():
             box-sizing: border-box;
             outline: none;
         }
-        input:focus {
-            border-color: #ff4b4b;
-            box-shadow: 0 0 0 1px #ff4b4b;
-        }
+        input:focus { border-color: #ff4b4b; box-shadow: 0 0 0 1px #ff4b4b; }
       </style>
     </head>
     <body>
@@ -70,23 +58,26 @@ def scryfall_autocomplete_box():
       </div>
 
       <script>
-        function sendMessageToStreamlit(value) {
-            window.parent.postMessage({
-                type: "streamlit:setComponentValue",
-                value: value
-            }, "*");
-        }
-
         const input = document.getElementById('mtgInput');
         const datalist = document.getElementById('scryfallList');
         let timer = null;
 
+        function sendToStreamlit(val) {
+            // Standard Streamlit iframe postMessage payload
+            window.parent.postMessage({
+                isStreamlitMessage: true,
+                type: "streamlit:setComponentValue",
+                value: val
+            }, "*");
+        }
+
         input.addEventListener('input', function(e) {
             const query = e.target.value.trim();
-            
             const options = Array.from(datalist.options).map(opt => opt.value);
+            
+            // If user clicks or picks a matched suggestion
             if (options.includes(query)) {
-                sendMessageToStreamlit(query);
+                sendToStreamlit(query);
                 return;
             }
 
@@ -95,6 +86,7 @@ def scryfall_autocomplete_box():
                 return;
             }
 
+            // Fetch live results without breaking cursor focus
             clearTimeout(timer);
             timer = setTimeout(() => {
                 fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query)}`)
@@ -112,12 +104,13 @@ def scryfall_autocomplete_box():
 
         input.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
-                sendMessageToStreamlit(input.value.trim());
+                sendToStreamlit(input.value.trim());
             }
         });
 
         window.addEventListener('load', () => {
             window.parent.postMessage({
+                isStreamlitMessage: true,
                 type: "streamlit:setFrameHeight",
                 height: 50
             }, "*");
@@ -126,7 +119,9 @@ def scryfall_autocomplete_box():
     </body>
     </html>
     """
-    return components.html(html_code, height=50)
+    # Using st.components.v1.html without unsupported params
+    res = components.html(html_code, height=50)
+    return res
 
 # 2. Dialog Modal for Card Details
 @st.dialog("Card Details", width="large")
