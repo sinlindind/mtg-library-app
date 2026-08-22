@@ -261,8 +261,8 @@ else:
                             purchase_uris = card.get("purchase_uris", {})
                             tcg_url = purchase_uris.get("tcgplayer")
 
-                            reg_str = f"[${usd}]({tcg_url})" if usd and tcg_url else (f"${usd}" if usd else "N/A")
-                            foil_str = f"[${usd_foil}]({tcg_url})" if usd_foil and tcg_url else (f"${usd_foil}" if usd_foil else "N/A")
+                            reg_str = f"[\\${usd}]({tcg_url})" if usd and tcg_url else (f"\\${usd}" if usd else "N/A")
+                            foil_str = f"[\\${usd_foil}]({tcg_url})" if usd_foil and tcg_url else (f"\\${usd_foil}" if usd_foil else "N/A")
 
                             st.markdown(f"**Price:** Reg: {reg_str} / Foil: {foil_str}")
                             
