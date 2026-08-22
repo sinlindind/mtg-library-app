@@ -4,41 +4,32 @@ import streamlit as st
 SCRYFALL_SEARCH_URL = "https://api.scryfall.com/cards/search"
 
 @st.cache_data(ttl=3600)
-def search_cards(query: str) -> list[dict]:
-    """Queries Scryfall API returning all printings and versions of matching cards."""
-    if not query.strip():
-        return []
-
-    params = {
-        "q": query,
-        "unique": "prints",  # <--- Changed from 'cards' to 'prints' to show every version/set
-        "order": "released", # Sorts printings chronologically (or use 'set')
-        "dir": "desc"        # Newest releases first
-    }
-
-    headers = {
-        "User-Agent": "MTGLibraryApp/1.0",
-        "Accept": "application/json"
-    }
-
+def search_cards(card_name: str) -> list:
+    """Fetch card printings from Scryfall using strict phrase matching."""
     try:
-        response = requests.get(
-            SCRYFALL_SEARCH_URL, 
-            params=params, 
-            headers=headers, 
-            timeout=10
-        )
+        base_url = "https://api.scryfall.com/cards/search"
         
-        if response.status_code == 200:
-            return response.json().get("data", [])
-        elif response.status_code == 404:
-            return []
-        else:
-            st.error(f"Scryfall API Error: {response.status_code}")
-            return []
+        # Attempt 1: Strict exact match for all unique printings
+        exact_query = f'exact:"{card_name}" unique:prints'
+        res = requests.get(base_url, params={"q": exact_query}, timeout=5)
+        
+        if res.status_code == 200:
+            data = res.json()
+            if data.get("object") == "list" and data.get("data"):
+                return data.get("data")
+        
+        # Attempt 2: Phrase fallback 
+        # Wrapping in quotes forces Scryfall to look for the exact phrase "sol ring", 
+        # preventing it from splitting into "sol" and "ring".
+        phrase_query = f'"{card_name}" unique:prints'
+        res_fallback = requests.get(base_url, params={"q": phrase_query}, timeout=5)
+        
+        if res_fallback.status_code == 200:
+            return res_fallback.json().get("data", [])
             
-    except requests.exceptions.RequestException as e:
-        st.error(f"Network error: {e}")
+        return []
+    except Exception as e:
+        print(f"Scryfall search error: {e}")
         return []
 
 def get_card_image_url(card: dict, size: str = "large") -> str:
