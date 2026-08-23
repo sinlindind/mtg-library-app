@@ -189,7 +189,17 @@ else:
         if st.session_state.get("should_scroll_top", False):
             st.session_state.should_scroll_top = False
             st.components.v1.html(
-                "<script>window.parent.scrollTo({top: 0, behavior: 'smooth'});</script>",
+                """
+                <script>
+                    const mainContainer = window.parent.document.querySelector('.main .block-container') || 
+                                          window.parent.document.querySelector('[data-testid="stMain"]') ||
+                                          window.parent.document.documentElement;
+                    if (mainContainer) {
+                        mainContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                    window.parent.scrollTo({ top: 0, behavior: 'smooth' });
+                </script>
+                """,
                 height=0,
             )
 
