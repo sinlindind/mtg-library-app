@@ -91,9 +91,6 @@ with st.sidebar:
 if "active_sort_option" not in st.session_state:
     st.session_state.active_sort_option = "Release Date (Newest First)"
 
-# 1. ANCHOR ELEMENT AT THE VERY TOP OF THE PAGE
-st.markdown("<div id='page-top'></div>", unsafe_allow_html=True)
-
 if not st.session_state.active_search_label:
     st.info("👈 Use the search bar in the sidebar to find Magic cards.")
 else:
@@ -102,7 +99,7 @@ else:
     if not results:
         st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
     else:
-        # 2. EXECUTE SCROLL INJECTION BEFORE ANY COLUMNS ARE CREATED
+        # EXECUTE ADJUSTED SCROLL INJECTION
         if st.session_state.get("should_scroll_top", False):
             st.session_state.should_scroll_top = False
             
@@ -114,26 +111,27 @@ else:
                         function scrollToAnchor() {
                             try {
                                 const doc = window.parent.document;
-                                const topAnchor = doc.getElementById('page-top');
-                                if (topAnchor) {
-                                    topAnchor.scrollIntoView({ behavior: 'instant', block: 'start' });
+                                const mainSec = doc.querySelector('section.main');
+                                if (mainSec) {
+                                    mainSec.scrollTo({ top: 0, left: 0, behavior: 'instant' });
                                 } else {
-                                    const mainSec = doc.querySelector('section.main');
-                                    if (mainSec) mainSec.scrollTop = 0;
+                                    window.parent.scrollTo(0, 0);
                                 }
                             } catch (e) {
                                 console.log('Scroll error:', e);
                             }
                         }
                         scrollToAnchor();
-                        setTimeout(scrollToAnchor, 150);
+                        setTimeout(scrollToAnchor, 100);
                     </script>
                     """,
                     height=0,
                     width=0
                 )
 
-        # 3. CLEAN COLUMN LAYOUT (UNAFFECTED BY IFRAME LAYOUT OVERFLOW)
+        # TARGET ANCHOR AT TOP OF CONTENT HEADER
+        st.markdown("<div id='page-top' style='position: relative; top: -60px;'></div>", unsafe_allow_html=True)
+
         col_info, col_sort = st.columns([3, 1], vertical_alignment="center")
         
         with col_info:
@@ -219,7 +217,7 @@ else:
                                 st.rerun()
                         with c2:
                             if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
-                                add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd else None)
+                                add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
                                 st.toast("Added 1x Foil!", icon="✅")
                                 st.rerun()
                     elif has_nonfoil:
@@ -231,7 +229,7 @@ else:
                     elif has_foil:
                         with c1:
                             if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
-                                add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd else None)
+                                add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
                                 st.toast("Added 1x Foil!", icon="✅")
                                 st.rerun()
 
