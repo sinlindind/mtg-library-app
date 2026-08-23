@@ -187,7 +187,6 @@ else:
 
     # --- SCREEN 1: SEARCH ---
     if menu_selection == "Search":
-        if menu_selection == "Search":
         if "active_sort_option" not in st.session_state:
             st.session_state.active_sort_option = "Release Date (Newest First)"
 
