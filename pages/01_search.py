@@ -99,7 +99,10 @@ else:
     if not results:
         st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
     else:
-        # EXECUTE SCROLL WITH PADDING OFFSET
+        # 1. ANCHOR ELEMENT WITH 100PX OFFSET PADDING
+        st.markdown("<div id='page-top' style='scroll-margin-top: 100px;'></div>", unsafe_allow_html=True)
+
+        # 2. SCROLL TO ANCHOR WITH EXPEXCT OFFSET
         if st.session_state.get("should_scroll_top", False):
             st.session_state.should_scroll_top = False
             
@@ -111,10 +114,9 @@ else:
                         function scrollToHeader() {
                             try {
                                 const doc = window.parent.document;
-                                const mainSec = doc.querySelector('section.main');
-                                if (mainSec) {
-                                    // Scroll to 0 (top of page), which leaves default Streamlit padding intact
-                                    mainSec.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                                const topAnchor = doc.getElementById('page-top');
+                                if (topAnchor) {
+                                    topAnchor.scrollIntoView({ behavior: 'instant', block: 'start' });
                                 }
                             } catch (e) {
                                 console.log('Scroll error:', e);
