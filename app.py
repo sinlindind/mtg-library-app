@@ -4,7 +4,7 @@ from streamlit_searchbox import st_searchbox
 
 from services.database import (
     create_user, get_user_by_username, get_user_by_email, verify_user_email,
-    add_card_to_library, get_user_library,
+    add_card_to_library, get_user_library, update_library_card, remove_from_library,
     add_to_wishlist, remove_from_wishlist, get_user_wishlist
 )
 from services.scryfall import search_cards, get_card_image_url, get_card_by_id
@@ -301,9 +301,14 @@ else:
             cols = st.columns(3)
             for idx, item in enumerate(active_cards):
                 col = cols[idx % 3]
+                entry_id = item.get("id")
                 scryfall_id = item.get("scryfall_id")
                 card_data = get_card_by_id(scryfall_id) if scryfall_id else None
                 tcg_url = card_data.get("purchase_uris", {}).get("tcgplayer") if card_data else None
+
+                qty = item.get("quantity", 0)
+                finish = item.get("finish", "nonfoil").capitalize()
+                cond = item.get("condition", "Near Mint")
 
                 with col:
                     with st.container(border=True):
@@ -315,13 +320,53 @@ else:
                         else:
                             st.caption("Card details unavailable")
 
-                        qty = item.get("quantity", 0)
-                        finish = item.get("finish", "nonfoil").capitalize()
-                        cond = item.get("condition", "Near Mint")
                         st.markdown(f"• **{qty}x** {finish} ({cond})")
 
+                        # Quick Controls: Increment, Decrement, Edit/Remove Popover
+                        c_dec, c_inc, c_edit = st.columns([1, 1, 1.2])
+                        
+                        with c_dec:
+                            if st.button("➖ 1", key=f"lib_dec_{entry_id}_{idx}", use_container_width=True):
+                                new_qty = qty - 1
+                                if new_qty <= 0:
+                                    remove_from_library(entry_id)
+                                    st.toast("Card removed from library", icon="🗑️")
+                                else:
+                                    update_library_card(entry_id, quantity=new_qty)
+                                    st.toast(f"Updated quantity to {new_qty}", icon="📉")
+                                st.rerun()
+
+                        with c_inc:
+                            if st.button("➕ 1", key=f"lib_inc_{entry_id}_{idx}", use_container_width=True):
+                                update_library_card(entry_id, quantity=qty + 1)
+                                st.toast(f"Updated quantity to {qty + 1}", icon="📈")
+                                st.rerun()
+
+                        with c_edit:
+                            with st.popover("⚙️ Edit", use_container_width=True):
+                                edit_qty = st.number_input(
+                                    "Quantity", min_value=1, value=qty, step=1, key=f"edit_qty_{entry_id}_{idx}"
+                                )
+                                edit_cond = st.selectbox(
+                                    "Condition",
+                                    ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
+                                    index=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"].index(cond) if cond in ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"] else 0,
+                                    key=f"edit_cond_{entry_id}_{idx}"
+                                )
+
+                                if st.button("Save Changes", key=f"save_lib_{entry_id}_{idx}", use_container_width=True):
+                                    update_library_card(entry_id, quantity=edit_qty, condition=edit_cond)
+                                    st.toast("Updated entry!", icon="✅")
+                                    st.rerun()
+
+                                st.divider()
+                                if st.button("🗑️ Delete Entry", key=f"del_lib_{entry_id}_{idx}", use_container_width=True):
+                                    remove_from_library(entry_id)
+                                    st.toast("Entry deleted", icon="🗑️")
+                                    st.rerun()
+
                         if tcg_url:
-                            st.link_button("🛒 Buy on TCGPlayer", tcg_url, use_container_width=True)
+                            st.link_button("🛒 TCGPlayer", tcg_url, use_container_width=True)
 
     # --- SCREEN 3: WISHLIST ---
     elif menu_selection == "Wishlist":
