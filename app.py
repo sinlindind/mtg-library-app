@@ -323,7 +323,7 @@ else:
                                 st.markdown(f"**{card_data.get('name', 'Unknown')}** ([TCG]({tcg_url}))")
                             else:
                                 st.markdown(f"**{card_data.get('name', 'Unknown')}**")
-                            st.caption(f"Set: {card_data.get('set_name', 'Unknown')} • **Total: {total_qty}x**")
+                            st.caption(f"Set: {card_data.get('set_name', 'Unknown')}")
                         else:
                             st.caption("Card details unavailable")
 
@@ -393,9 +393,6 @@ else:
                                 )
                                 st.toast("Added variant!", icon="✅")
                                 st.rerun()
-
-                        if tcg_url:
-                            st.link_button("🛒 TCGPlayer", tcg_url, use_container_width=True)
 
     # --- SCREEN 3: WISHLIST ---
     elif menu_selection == "Wishlist":
