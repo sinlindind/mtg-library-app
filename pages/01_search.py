@@ -102,14 +102,31 @@ else:
         # EXECUTE PARENT WINDOW SCROLL TO TOP WHEN NEW SEARCH IS PERFORMED
         if st.session_state.get("should_scroll_top", False):
             st.session_state.should_scroll_top = False
+            
+            # Using key ensures Streamlit destroys and rebuilds this iframe on every search counter increment
             components.html(
-                """
+                f"""
                 <script>
-                    window.parent.document.querySelector('section.main').scrollTo(0, 0);
+                    function scrollToTop() {{
+                        const doc = window.parent.document;
+                        // Target main scroll container in standard Streamlit layout
+                        const mainSection = doc.querySelector('section.main');
+                        if (mainSection) {{
+                            mainSection.scrollTo({{ top: 0, left: 0, behavior: 'instant' }});
+                        }}
+                        // Fallback for app containers
+                        const appView = doc.querySelector('.stAppViewMain') || doc.querySelector('.stApp');
+                        if (appView) {{
+                            appView.scrollTo({{ top: 0, left: 0, behavior: 'instant' }});
+                        }}
+                        window.parent.scrollTo(0, 0);
+                    }}
+                    setTimeout(scrollToTop, 50);
                 </script>
                 """,
                 height=0,
-                width=0
+                width=0,
+                key=f"scroll_component_{st.session_state.searchbox_key_counter}"
             )
 
         col_info, col_sort = st.columns([3, 1], vertical_alignment="center")
