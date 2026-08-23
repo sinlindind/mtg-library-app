@@ -248,7 +248,7 @@ else:
                             if tcg_url:
                                 st.markdown(f"**{card.get('name', 'Unknown')}** ([TCG]({tcg_url}))")
                             else:
-                                st.markdown(f"**{card.get('name', 'Unknown')}** ([TCG]({tcg_url}))")
+                                st.markdown(f"**{card.get('name', 'Unknown')}**")
                             set_name = card.get("set_name", "Unknown Set")
                             released_date = card.get("released_at", "")
                             st.caption(f"{set_name}")
