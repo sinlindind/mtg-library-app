@@ -271,30 +271,29 @@ else:
                             has_nonfoil = "nonfoil" in available_finishes
                             has_foil = "foil" in available_finishes or "etched" in available_finishes
 
-                            c1 = st.columns(1)
-                            with c1:
-                                if has_nonfoil and has_foil:
-                                    c1, c2 = st.columns(2)
-                                    with c1:
-                                        if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
-                                            add_card_to_library(user["id"], card["id"], "nonfoil", 1, "Near Mint", float(usd) if usd else None)
-                                            st.toast("Added 1x Regular!", icon="✅")
-                                            st.rerun()
-                                    with c2:
-                                        if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
-                                            add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
-                                            st.toast("Added 1x Foil!", icon="✅")
-                                            st.rerun()
-                                elif has_nonfoil:
+                            
+                            if has_nonfoil and has_foil:
+                                c1,c2 = st.columns(2)
+                                with c1:
                                     if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
                                         add_card_to_library(user["id"], card["id"], "nonfoil", 1, "Near Mint", float(usd) if usd else None)
                                         st.toast("Added 1x Regular!", icon="✅")
                                         st.rerun()
-                                elif has_foil:
+                                with c2:
                                     if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
                                         add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
                                         st.toast("Added 1x Foil!", icon="✅")
                                         st.rerun()
+                            elif has_nonfoil:
+                                if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
+                                    add_card_to_library(user["id"], card["id"], "nonfoil", 1, "Near Mint", float(usd) if usd else None)
+                                    st.toast("Added 1x Regular!", icon="✅")
+                                    st.rerun()
+                            elif has_foil:
+                                if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
+                                    add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
+                                    st.toast("Added 1x Foil!", icon="✅")
+                                    st.rerun()
 
                             c_wish, c_tcg = st.columns(2)
                             with c_wish:
