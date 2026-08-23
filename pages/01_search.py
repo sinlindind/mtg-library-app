@@ -99,7 +99,10 @@ else:
     if not results:
         st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
     else:
-        # EXECUTE ADJUSTED SCROLL INJECTION
+        # 1. ANCHOR ELEMENT AT TOP OF CONTENT AREA
+        st.markdown("<div id='page-top'></div>", unsafe_allow_html=True)
+
+        # 2. WORKING ANCHOR SCROLL INJECTION WITH 'nearest' ALIGNMENT
         if st.session_state.get("should_scroll_top", False):
             st.session_state.should_scroll_top = False
             
@@ -111,26 +114,21 @@ else:
                         function scrollToAnchor() {
                             try {
                                 const doc = window.parent.document;
-                                const mainSec = doc.querySelector('section.main');
-                                if (mainSec) {
-                                    mainSec.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-                                } else {
-                                    window.parent.scrollTo(0, 0);
+                                const topAnchor = doc.getElementById('page-top');
+                                if (topAnchor) {
+                                    topAnchor.scrollIntoView({ behavior: 'instant', block: 'nearest' });
                                 }
                             } catch (e) {
                                 console.log('Scroll error:', e);
                             }
                         }
                         scrollToAnchor();
-                        setTimeout(scrollToAnchor, 100);
+                        setTimeout(scrollToAnchor, 150);
                     </script>
                     """,
                     height=0,
                     width=0
                 )
-
-        # TARGET ANCHOR AT TOP OF CONTENT HEADER
-        st.markdown("<div id='page-top' style='position: relative; top: -60px;'></div>", unsafe_allow_html=True)
 
         col_info, col_sort = st.columns([3, 1], vertical_alignment="center")
         
