@@ -99,10 +99,7 @@ else:
     if not results:
         st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
     else:
-        # 1. ANCHOR ELEMENT AT TOP OF CONTENT AREA
-        st.markdown("<div id='page-top'></div>", unsafe_allow_html=True)
-
-        # 2. WORKING ANCHOR SCROLL INJECTION WITH 'nearest' ALIGNMENT
+        # EXECUTE SCROLL WITH PADDING OFFSET
         if st.session_state.get("should_scroll_top", False):
             st.session_state.should_scroll_top = False
             
@@ -111,19 +108,20 @@ else:
                 components.html(
                     """
                     <script>
-                        function scrollToAnchor() {
+                        function scrollToHeader() {
                             try {
                                 const doc = window.parent.document;
-                                const topAnchor = doc.getElementById('page-top');
-                                if (topAnchor) {
-                                    topAnchor.scrollIntoView({ behavior: 'instant', block: 'nearest' });
+                                const mainSec = doc.querySelector('section.main');
+                                if (mainSec) {
+                                    // Scroll to 0 (top of page), which leaves default Streamlit padding intact
+                                    mainSec.scrollTo({ top: 0, left: 0, behavior: 'instant' });
                                 }
                             } catch (e) {
                                 console.log('Scroll error:', e);
                             }
                         }
-                        scrollToAnchor();
-                        setTimeout(scrollToAnchor, 150);
+                        scrollToHeader();
+                        setTimeout(scrollToHeader, 100);
                     </script>
                     """,
                     height=0,
