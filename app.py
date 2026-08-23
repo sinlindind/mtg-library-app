@@ -4,7 +4,8 @@ from streamlit_searchbox import st_searchbox
 
 from services.database import (
     create_user, get_user_by_username, get_user_by_email, verify_user_email,
-    add_card_to_library, get_user_library
+    add_card_to_library, get_user_library,
+    add_to_wishlist, remove_from_wishlist, get_user_wishlist
 )
 from services.scryfall import search_cards, get_card_image_url, get_card_by_id
 from utils.auth import hash_password, verify_password
@@ -37,15 +38,12 @@ def search_scryfall_names(search_term: str) -> list[str]:
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# Search state persistence and input clear control
 if "active_search_label" not in st.session_state:
     st.session_state.active_search_label = ""
 if "active_search_results" not in st.session_state:
     st.session_state.active_search_results = []
 if "searchbox_key_counter" not in st.session_state:
     st.session_state.searchbox_key_counter = 0
-if "last_processed_selection" not in st.session_state:
-    st.session_state.last_processed_selection = None
 
 # 3. Handle Verification Link in URL
 query_params = st.query_params
@@ -117,7 +115,7 @@ if st.session_state.user is None:
                     st.info(f"Verification token generated: `{token}`")
 
 # ==========================================
-# AUTHENTICATED VIEW (Search & Library)
+# AUTHENTICATED VIEW (Search, Library & Wishlist)
 # ==========================================
 else:
     user = st.session_state.user
@@ -125,7 +123,6 @@ else:
     st.markdown("""
         <style>
             [data-testid="stSidebarNav"] {display: none;}
-            /* Maximize width and clear top header overlay */
             .block-container { 
                 padding-top: 4rem !important; 
                 padding-bottom: 2rem !important;
@@ -133,7 +130,6 @@ else:
                 padding-right: 2rem !important;
                 max-width: 98% !important;
             }
-            /* Hide Streamlit top header gradient/overlay that clips elements */
             header[data-testid="stHeader"] {
                 background: transparent !important;
                 z-index: 1 !important;
@@ -143,14 +139,14 @@ else:
     """, unsafe_allow_html=True)
 
     user_library = get_user_library(user["id"])
+    user_wishlist = get_user_wishlist(user["id"])
 
-    # --- SIDEBAR: NAVIGATION & PERMANENT SEARCH ---
+    # --- SIDEBAR: NAVIGATION & SEARCH ---
     with st.sidebar:
         st.title(f"👤 {user['username']}")
-        menu_selection = st.radio("Navigation", options=["Search", "My Library"], index=0)
+        menu_selection = st.radio("Navigation", options=["Search", "My Library", "Wishlist"], index=0)
         st.divider()
 
-        # Search bar resides permanently in the sticky sidebar when active
         if menu_selection == "Search":
             st.markdown("### 🔍 Card Search")
             current_search_key = f"scryfall_box_{st.session_state.searchbox_key_counter}"
@@ -160,7 +156,6 @@ else:
                 key=current_search_key
             )
 
-            # Process search trigger
             if search_selection and len(search_selection.strip()) >= 2:
                 query = search_selection.strip()
                 if query != st.session_state.active_search_label:
@@ -177,7 +172,7 @@ else:
             st.session_state.user = None
             st.rerun()
 
-    # --- SCREEN 1: MAIN SEARCH RESULTS ---
+    # --- SCREEN 1: SEARCH ---
     if menu_selection == "Search":
         if "active_sort_option" not in st.session_state:
             st.session_state.active_sort_option = "Release Date (Newest First)"
@@ -238,10 +233,10 @@ else:
                 elif sort_option == "Name (A-Z)":
                     sorted_results.sort(key=lambda x: x.get("name", "").lower())
 
-                # Single native scroll flow (no inner scrollboxes)
                 for idx, card in enumerate(sorted_results):
                     card_id = f"{card['id']}_{idx}"
                     owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
+                    is_in_wishlist = card["id"] in user_wishlist
                     
                     col_img, col_info, col_actions = st.columns([2, 2.8, 2])
                     
@@ -261,10 +256,7 @@ else:
                         prices = card.get("prices", {})
                         usd = prices.get("usd")
                         usd_foil = prices.get("usd_foil")
-                        purchase_uris = card.get("purchase_uris", {})
-                        tcg_url = purchase_uris.get("tcgplayer")
 
-                        # TCGplayer Hyperlinks
                         reg_str = f"\\${usd}" if usd else "N/A"
                         foil_str = f"\\${usd_foil}" if usd_foil else "N/A"
 
@@ -329,14 +321,28 @@ else:
                                 st.toast(f"Added {custom_qty}x {custom_finish.capitalize()}!", icon="✅")
                                 st.rerun()
 
+                        # --- WISHLIST CHECKBOX ---
+                        wishlist_state = st.checkbox(
+                            "❤️ Wishlist", 
+                            value=is_in_wishlist, 
+                            key=f"wishlist_chk_{card_id}"
+                        )
+                        if wishlist_state != is_in_wishlist:
+                            if wishlist_state:
+                                add_to_wishlist(user["id"], card["id"])
+                                st.toast("Added to Wishlist!", icon="❤️")
+                            else:
+                                remove_from_wishlist(user["id"], card["id"])
+                                st.toast("Removed from Wishlist", icon="🗑️")
+                            st.rerun()
+
                     st.divider()
 
     # --- SCREEN 2: MY LIBRARY ---
     elif menu_selection == "My Library":
         st.title("📦 My Library")
         
-        library_cards = get_user_library(user["id"])
-        active_cards = [card for card in library_cards if card.get("quantity", 0) > 0]
+        active_cards = [card for card in user_library if card.get("quantity", 0) > 0]
         
         if not active_cards:
             st.info("Your library is currently empty. Use Search to add cards!")
@@ -375,4 +381,41 @@ else:
                 with col_actions:
                     st.empty()
                 
+                st.divider()
+
+    # --- SCREEN 3: WISHLIST ---
+    elif menu_selection == "Wishlist":
+        st.title("❤️ My Wishlist")
+        
+        if not user_wishlist:
+            st.info("Your wishlist is empty. Use Search to check cards onto your wishlist!")
+        else:
+            st.success(f"Wishlist count: **{len(user_wishlist)}** cards")
+            
+            for idx, scryfall_id in enumerate(user_wishlist):
+                card_data = get_card_by_id(scryfall_id)
+                col_img, col_info, col_actions = st.columns([1, 2.5, 1.5])
+                
+                with col_img:
+                    if card_data:
+                        img_url = get_card_image_url(card_data, size="small")
+                        st.image(img_url, width=150)
+                    else:
+                        st.caption("No image available")
+                        
+                with col_info:
+                    if card_data:
+                        st.subheader(card_data.get("name", "Unknown Card"))
+                        set_name = card_data.get("set_name", "Unknown Set")
+                        set_code = card_data.get("set", "").upper()
+                        st.caption(f"Set: **{set_name}** (`{set_code}`)")
+                        prices = card_data.get("prices", {})
+                        st.caption(f"Price: \\${prices.get('usd', 'N/A')}")
+                
+                with col_actions:
+                    if st.button("❌ Remove", key=f"rem_wish_{scryfall_id}_{idx}", use_container_width=True):
+                        remove_from_wishlist(user["id"], scryfall_id)
+                        st.toast("Removed from Wishlist", icon="🗑️")
+                        st.rerun()
+                        
                 st.divider()
