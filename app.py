@@ -184,6 +184,14 @@ else:
         if "active_sort_option" not in st.session_state:
             st.session_state.active_sort_option = "Release Date (Newest First)"
 
+        # Scroll window to top on new search trigger
+        if st.session_state.get("should_scroll_top", False):
+            st.session_state.should_scroll_top = False
+            st.components.v1.html(
+                "<script>window.parent.scrollTo({top: 0, behavior: 'smooth'});</script>",
+                height=0,
+            )
+
         if not st.session_state.active_search_label:
             st.info("👈 Use the search bar in the sidebar to find Magic cards.")
         else:
