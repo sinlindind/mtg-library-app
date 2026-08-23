@@ -187,48 +187,12 @@ else:
 
     # --- SCREEN 1: SEARCH ---
     if menu_selection == "Search":
+        if menu_selection == "Search":
         if "active_sort_option" not in st.session_state:
             st.session_state.active_sort_option = "Release Date (Newest First)"
 
-        # Initialize previous label tracker
-        if "prev_search_label" not in st.session_state:
-            st.session_state.prev_search_label = ""
-
-        # Trigger CSS scroll reset when search query changes
-        if st.session_state.active_search_label and st.session_state.active_search_label != st.session_state.prev_search_label:
-            st.session_state.prev_search_label = st.session_state.active_search_label
-            
-            st.markdown(
-                """
-                <style>
-                    /* Target Streamlit's internal scroll containers */
-                    section[data-testid="stSidebar"] ~ section,
-                    .stMainBlockContainer,
-                    [data-testid="stAppViewMain"] {
-                        scroll-behavior: auto !important;
-                    }
-                    
-                    /* Force container animation to scrollTop 0 */
-                    @keyframes forceScrollTop {
-                        from { scroll-top: 0; }
-                        to { scroll-top: 0; }
-                    }
-                    
-                    section[data-testid="stMain"] {
-                        animation: forceScrollTop 0.01s forwards;
-                    }
-                </style>
-                <a id="search-top-anchor"></a>
-                <script>
-                    // Fallback scroll attempt via anchor tag
-                    var anchor = document.getElementById('search-top-anchor');
-                    if (anchor) {
-                        anchor.scrollIntoView({behavior: 'instant', block: 'start'});
-                    }
-                </script>
-                """,
-                unsafe_allow_html=True
-            )
+        if "results_key_counter" not in st.session_state:
+            st.session_state.results_key_counter = 0
 
         if not st.session_state.active_search_label:
             st.info("👈 Use the search bar in the sidebar to find Magic cards.")
@@ -238,44 +202,48 @@ else:
             if not results:
                 st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
             else:
-                col_info, col_sort = st.columns([3, 1], vertical_alignment="center")
+                # CREATING A NEW CONTAINER WITH A UNIQUE KEY FORCES DOM RESET TO TOP
+                results_container = st.container(key=f"search_results_wrapper_{st.session_state.results_key_counter}")
                 
-                with col_info:
-                    st.subheader(f"🔍 **{st.session_state.active_search_label}** ({len(results)} printings)")
-
-                def on_sort_change():
-                    st.session_state.active_sort_option = st.session_state.search_sort_dropdown
-
-                with col_sort:
-                    sort_options = [
-                        "Release Date (Newest First)",
-                        "Release Date (Oldest First)",
-                        "Price: High to Low",
-                        "Price: Low to High",
-                        "Name (A-Z)"
-                    ]
-                    current_idx = sort_options.index(st.session_state.active_sort_option) if st.session_state.active_sort_option in sort_options else 0
+                with results_container:
+                    col_info, col_sort = st.columns([3, 1], vertical_alignment="center")
                     
-                    sort_option = st.selectbox(
-                        "Sort results by",
-                        options=sort_options,
-                        index=current_idx,
-                        key="search_sort_dropdown",
-                        on_change=on_sort_change,
-                        label_visibility="collapsed"
-                    )
+                    with col_info:
+                        st.subheader(f"🔍 **{st.session_state.active_search_label}** ({len(results)} printings)")
 
-                sorted_results = list(results)
-                if sort_option == "Release Date (Newest First)":
-                    sorted_results.sort(key=lambda x: x.get("released_at", ""), reverse=True)
-                elif sort_option == "Release Date (Oldest First)":
-                    sorted_results.sort(key=lambda x: x.get("released_at", ""))
-                elif sort_option == "Price: High to Low":
-                    sorted_results.sort(key=parse_price, reverse=True)
-                elif sort_option == "Price: Low to High":
-                    sorted_results.sort(key=parse_price)
-                elif sort_option == "Name (A-Z)":
-                    sorted_results.sort(key=lambda x: x.get("name", "").lower())
+                    def on_sort_change():
+                        st.session_state.active_sort_option = st.session_state.search_sort_dropdown
+
+                    with col_sort:
+                        sort_options = [
+                            "Release Date (Newest First)",
+                            "Release Date (Oldest First)",
+                            "Price: High to Low",
+                            "Price: Low to High",
+                            "Name (A-Z)"
+                        ]
+                        current_idx = sort_options.index(st.session_state.active_sort_option) if st.session_state.active_sort_option in sort_options else 0
+                        
+                        sort_option = st.selectbox(
+                            "Sort results by",
+                            options=sort_options,
+                            index=current_idx,
+                            key="search_sort_dropdown",
+                            on_change=on_sort_change,
+                            label_visibility="collapsed"
+                        )
+
+                    sorted_results = list(results)
+                    if sort_option == "Release Date (Newest First)":
+                        sorted_results.sort(key=lambda x: x.get("released_at", ""), reverse=True)
+                    elif sort_option == "Release Date (Oldest First)":
+                        sorted_results.sort(key=lambda x: x.get("released_at", ""))
+                    elif sort_option == "Price: High to Low":
+                        sorted_results.sort(key=parse_price, reverse=True)
+                    elif sort_option == "Price: Low to High":
+                        sorted_results.sort(key=parse_price)
+                    elif sort_option == "Name (A-Z)":
+                        sorted_results.sort(key=lambda x: x.get("name", "").lower())
 
                 # Compact 3-Column Display Grid
                 cols = st.columns(3)
