@@ -64,7 +64,7 @@ with st.sidebar:
                 st.session_state.active_search_results = results
                 st.session_state.searchbox_key_counter += 1
                 # Force navigation back to page top on fresh search
-                st.switch_page("pages/1_🔍_Search.py")
+                st.switch_page("pages/01_search.py.py")
 
     st.divider()
     if st.button("Logout", use_container_width=True):
