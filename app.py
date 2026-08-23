@@ -189,25 +189,40 @@ else:
         if "prev_search_label" not in st.session_state:
             st.session_state.prev_search_label = ""
 
-        # Check if the search query changed
+        # Trigger CSS scroll reset when search query changes
         if st.session_state.active_search_label and st.session_state.active_search_label != st.session_state.prev_search_label:
             st.session_state.prev_search_label = st.session_state.active_search_label
             
-            # Inject auto-scroll script targeting the parent window scroll context
-            st.components.v1.html(
+            st.markdown(
                 """
+                <style>
+                    /* Target Streamlit's internal scroll containers */
+                    section[data-testid="stSidebar"] ~ section,
+                    .stMainBlockContainer,
+                    [data-testid="stAppViewMain"] {
+                        scroll-behavior: auto !important;
+                    }
+                    
+                    /* Force container animation to scrollTop 0 */
+                    @keyframes forceScrollTop {
+                        from { scroll-top: 0; }
+                        to { scroll-top: 0; }
+                    }
+                    
+                    section[data-testid="stMain"] {
+                        animation: forceScrollTop 0.01s forwards;
+                    }
+                </style>
+                <a id="search-top-anchor"></a>
                 <script>
-                    window.top.postMessage({type: 'streamlit:scroll', offset: 0}, '*');
-                    try {
-                        window.parent.scrollTo({top: 0, left: 0, behavior: 'smooth'});
-                    } catch(e) {}
-                    try {
-                        var mainEl = window.parent.document.querySelector('section.main');
-                        if (mainEl) { mainEl.scrollTop = 0; }
-                    } catch(e) {}
+                    // Fallback scroll attempt via anchor tag
+                    var anchor = document.getElementById('search-top-anchor');
+                    if (anchor) {
+                        anchor.scrollIntoView({behavior: 'instant', block: 'start'});
+                    }
                 </script>
                 """,
-                height=0,
+                unsafe_allow_html=True
             )
 
         if not st.session_state.active_search_label:
