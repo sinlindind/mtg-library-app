@@ -83,6 +83,17 @@ else:
     if not results:
         st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
     else:
+        # EXECUTE PARENT WINDOW SCROLL TO TOP
+        components.html(
+            """
+            <script>
+                window.parent.document.querySelector('section.main').scrollTo(0, 0);
+            </script>
+            """,
+            height=0,
+            width=0
+        )
+
         col_info, col_sort = st.columns([3, 1], vertical_alignment="center")
         
         with col_info:
