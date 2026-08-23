@@ -201,7 +201,7 @@ else:
             if not results:
                 st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
             else:
-                # CREATING A NEW CONTAINER WITH A UNIQUE KEY FORCES DOM RESET TO TOP
+                # ALL search UI elements must live inside this container to trigger a scroll reset
                 results_container = st.container(key=f"search_results_wrapper_{st.session_state.results_key_counter}")
                 
                 with results_container:
@@ -244,82 +244,81 @@ else:
                     elif sort_option == "Name (A-Z)":
                         sorted_results.sort(key=lambda x: x.get("name", "").lower())
 
-                # Compact 3-Column Display Grid
-                cols = st.columns(3)
-                for idx, card in enumerate(sorted_results):
-                    col = cols[idx % 3]
-                    card_id = f"{card['id']}_{idx}"
-                    owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
-                    is_in_wishlist = card["id"] in user_wishlist
-                    tcg_url = card.get("purchase_uris", {}).get("tcgplayer")
-                    
-                    with col:
-                        with st.container(border=True):
-                            img_url = get_card_image_url(card, size="large")
-                            st.image(img_url, use_container_width=True)
-                            
-                            if tcg_url:
-                                st.markdown(f"**{card.get('name', 'Unknown')}** ([TCG]({tcg_url}))")
-                            else:
-                                st.markdown(f"**{card.get('name', 'Unknown')}**")
-                            valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
-                            total_qty = sum(item.get("quantity", 0) for item in valid_owned)
-                            if total_qty > 0:
-                                st.caption(f"✅ **{total_qty}** in library")
-                            else:
-                                st.caption(f"{total_qty} owned")
-                            set_name = card.get("set_name", "Unknown Set")
-                            released_date = card.get("released_at", "")
-                            st.caption(f"{set_name}")
-                            st.caption(f"{released_date}")
-                            
-                            prices = card.get("prices", {})
-                            usd = prices.get("usd")
-                            usd_foil = prices.get("usd_foil")
-                            st.caption(f"Reg: **\\${usd if usd else 'N/A'}** | Foil: **\\${usd_foil if usd_foil else 'N/A'}**")
+                    # Compact 3-Column Display Grid (INDENTED INSIDE THE CONTAINER)
+                    cols = st.columns(3)
+                    for idx, card in enumerate(sorted_results):
+                        col = cols[idx % 3]
+                        card_id = f"{card['id']}_{idx}"
+                        owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
+                        is_in_wishlist = card["id"] in user_wishlist
+                        tcg_url = card.get("purchase_uris", {}).get("tcgplayer")
+                        
+                        with col:
+                            with st.container(border=True):
+                                img_url = get_card_image_url(card, size="large")
+                                st.image(img_url, use_container_width=True)
+                                
+                                if tcg_url:
+                                    st.markdown(f"**{card.get('name', 'Unknown')}** ([TCG]({tcg_url}))")
+                                else:
+                                    st.markdown(f"**{card.get('name', 'Unknown')}**")
+                                valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
+                                total_qty = sum(item.get("quantity", 0) for item in valid_owned)
+                                if total_qty > 0:
+                                    st.caption(f"✅ **{total_qty}** in library")
+                                else:
+                                    st.caption(f"{total_qty} owned")
+                                set_name = card.get("set_name", "Unknown Set")
+                                released_date = card.get("released_at", "")
+                                st.caption(f"{set_name}")
+                                st.caption(f"{released_date}")
+                                
+                                prices = card.get("prices", {})
+                                usd = prices.get("usd")
+                                usd_foil = prices.get("usd_foil")
+                                st.caption(f"Reg: **\\${usd if usd else 'N/A'}** | Foil: **\\${usd_foil if usd_foil else 'N/A'}**")
 
-                            # Add/Wishlist Controls
-                            # Extract available finishes from Scryfall API data
-                            available_finishes = card.get("finishes", ["nonfoil", "foil"])
-                            has_nonfoil = "nonfoil" in available_finishes
-                            has_foil = "foil" in available_finishes or "etched" in available_finishes
+                                # Add/Wishlist Controls
+                                available_finishes = card.get("finishes", ["nonfoil", "foil"])
+                                has_nonfoil = "nonfoil" in available_finishes
+                                has_foil = "foil" in available_finishes or "etched" in available_finishes
 
-                            c1,c2 = st.columns(2)
-                            if has_nonfoil and has_foil:
-                                with c1:
-                                    if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
-                                        add_card_to_library(user["id"], card["id"], "nonfoil", 1, "Near Mint", float(usd) if usd else None)
-                                        st.toast("Added 1x Regular!", icon="✅")
-                                        st.rerun()
-                                with c2:
-                                    if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
-                                        add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
-                                        st.toast("Added 1x Foil!", icon="✅")
-                                        st.rerun()
-                            elif has_nonfoil:
-                                with c1:
-                                    if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
-                                        add_card_to_library(user["id"], card["id"], "nonfoil", 1, "Near Mint", float(usd) if usd else None)
-                                        st.toast("Added 1x Regular!", icon="✅")
-                                        st.rerun()
-                            elif has_foil:
-                                with c1:
-                                    if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
-                                        add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
-                                        st.toast("Added 1x Foil!", icon="✅")
-                                        st.rerun()
+                                c1, c2 = st.columns(2)
+                                if has_nonfoil and has_foil:
+                                    with c1:
+                                        if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
+                                            add_card_to_library(user["id"], card["id"], "nonfoil", 1, "Near Mint", float(usd) if usd else None)
+                                            st.toast("Added 1x Regular!", icon="✅")
+                                            st.rerun()
+                                    with c2:
+                                        if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
+                                            add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
+                                            st.toast("Added 1x Foil!", icon="✅")
+                                            st.rerun()
+                                elif has_nonfoil:
+                                    with c1:
+                                        if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
+                                            add_card_to_library(user["id"], card["id"], "nonfoil", 1, "Near Mint", float(usd) if usd else None)
+                                            st.toast("Added 1x Regular!", icon="✅")
+                                            st.rerun()
+                                elif has_foil:
+                                    with c1:
+                                        if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
+                                            add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
+                                            st.toast("Added 1x Foil!", icon="✅")
+                                            st.rerun()
 
-                            c_wish, c_tcg = st.columns(2)
-                            with c_wish:
-                                wishlist_state = st.checkbox("❤️ Wishlist", value=is_in_wishlist, key=f"wishlist_chk_{card_id}")
-                                if wishlist_state != is_in_wishlist:
-                                    if wishlist_state:
-                                        add_to_wishlist(user["id"], card["id"])
-                                        st.toast("Added to Wishlist!", icon="❤️")
-                                    else:
-                                        remove_from_wishlist(user["id"], card["id"])
-                                        st.toast("Removed from Wishlist", icon="🗑️")
-                                    st.rerun()
+                                c_wish, c_tcg = st.columns(2)
+                                with c_wish:
+                                    wishlist_state = st.checkbox("❤️ Wishlist", value=is_in_wishlist, key=f"wishlist_chk_{card_id}")
+                                    if wishlist_state != is_in_wishlist:
+                                        if wishlist_state:
+                                            add_to_wishlist(user["id"], card["id"])
+                                            st.toast("Added to Wishlist!", icon="❤️")
+                                        else:
+                                            remove_from_wishlist(user["id"], card["id"])
+                                            st.toast("Removed from Wishlist", icon="🗑️")
+                                        st.rerun()
 
     # --- SCREEN 2: MY LIBRARY ---
     elif menu_selection == "My Library":
