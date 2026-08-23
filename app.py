@@ -245,7 +245,10 @@ else:
                             img_url = get_card_image_url(card, size="large")
                             st.image(img_url, use_container_width=True)
                             
-                            st.markdown(f"**{card.get('name', 'Unknown')}**")
+                            if tcg_url:
+                                st.markdown(f"**{card.get('name', 'Unknown')}** ([TCG]({tcg_url}))")
+                            else:
+                                st.markdown(f"**{card.get('name', 'Unknown')}** ([TCG]({tcg_url}))")
                             set_name = card.get("set_name", "Unknown Set")
                             released_date = card.get("released_at", "")
                             st.caption(f"{set_name}")
@@ -260,9 +263,6 @@ else:
                             if valid_owned:
                                 total_qty = sum(item.get("quantity", 0) for item in valid_owned)
                                 st.caption(f"In Library: **{total_qty}x**")
-                            
-                            if tcg_url:
-                                st.caption(f"[TCG Player]({tcg_url})")
 
                             # Add/Wishlist Controls
                             c1, c2 = st.columns(2)
