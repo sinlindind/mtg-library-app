@@ -99,6 +99,34 @@ def get_user_library(user_id: str):
     response = supabase.table("user_cards").select("*").eq("user_id", user_id).execute()
     return response.data if response.data else []
 
+def update_library_card(entry_id: str, quantity: int = None, condition: str = None):
+    """Updates quantity and/or condition for a specific card entry in user_cards."""
+    update_data = {}
+    if quantity is not None:
+        update_data["quantity"] = quantity
+    if condition is not None:
+        update_data["condition"] = condition
+
+    if not update_data:
+        return None
+
+    response = supabase.table("user_cards") \
+        .update(update_data) \
+        .eq("id", entry_id) \
+        .execute()
+    
+    return response.data[0] if response.data else None
+
+
+def remove_from_library(entry_id: str):
+    """Deletes a card entry from user_cards by its row ID."""
+    response = supabase.table("user_cards") \
+        .delete() \
+        .eq("id", entry_id) \
+        .execute()
+    
+    return response.data
+
 
 # ==========================================
 # Wishlist Functions
