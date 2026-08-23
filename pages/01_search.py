@@ -102,7 +102,7 @@ else:
     if not results:
         st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
     else:
-        # EXECUTE SCROLL INTO VIEW
+        # 2. EXECUTE SCROLL INJECTION BEFORE ANY COLUMNS ARE CREATED
         if st.session_state.get("should_scroll_top", False):
             st.session_state.should_scroll_top = False
             
@@ -118,7 +118,6 @@ else:
                                 if (topAnchor) {
                                     topAnchor.scrollIntoView({ behavior: 'instant', block: 'start' });
                                 } else {
-                                    // Direct element fallback
                                     const mainSec = doc.querySelector('section.main');
                                     if (mainSec) mainSec.scrollTop = 0;
                                 }
@@ -126,7 +125,6 @@ else:
                                 console.log('Scroll error:', e);
                             }
                         }
-                        // Trigger immediately and after brief layout render window
                         scrollToAnchor();
                         setTimeout(scrollToAnchor, 150);
                     </script>
@@ -135,6 +133,7 @@ else:
                     width=0
                 )
 
+        # 3. CLEAN COLUMN LAYOUT (UNAFFECTED BY IFRAME LAYOUT OVERFLOW)
         col_info, col_sort = st.columns([3, 1], vertical_alignment="center")
         
         with col_info:
@@ -220,7 +219,7 @@ else:
                                 st.rerun()
                         with c2:
                             if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
-                                add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
+                                add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd else None)
                                 st.toast("Added 1x Foil!", icon="✅")
                                 st.rerun()
                     elif has_nonfoil:
@@ -232,7 +231,7 @@ else:
                     elif has_foil:
                         with c1:
                             if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
-                                add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
+                                add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd else None)
                                 st.toast("Added 1x Foil!", icon="✅")
                                 st.rerun()
 
