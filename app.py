@@ -6,7 +6,8 @@ from utils.tokens import generate_verification_token, verify_token
 st.set_page_config(
     page_title="MTG Library App", 
     page_icon="🃏", 
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 # Initialize Session States
