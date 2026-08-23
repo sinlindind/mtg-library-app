@@ -162,6 +162,7 @@ else:
                         st.session_state.active_search_label = query
                         st.session_state.active_search_results = results
                         st.session_state.searchbox_key_counter += 1
+                        st.session_state.should_scroll_top = True
                         st.rerun()
 
             st.divider()
