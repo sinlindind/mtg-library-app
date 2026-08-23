@@ -185,19 +185,26 @@ else:
         if "active_sort_option" not in st.session_state:
             st.session_state.active_sort_option = "Release Date (Newest First)"
 
-        # Scroll window to top on new search trigger
-        if st.session_state.get("should_scroll_top", False):
-            st.session_state.should_scroll_top = False
+        # Initialize previous label tracker
+        if "prev_search_label" not in st.session_state:
+            st.session_state.prev_search_label = ""
+
+        # Check if the search query changed
+        if st.session_state.active_search_label and st.session_state.active_search_label != st.session_state.prev_search_label:
+            st.session_state.prev_search_label = st.session_state.active_search_label
+            
+            # Inject auto-scroll script targeting the parent window scroll context
             st.components.v1.html(
                 """
                 <script>
-                    const mainContainer = window.parent.document.querySelector('.main .block-container') || 
-                                          window.parent.document.querySelector('[data-testid="stMain"]') ||
-                                          window.parent.document.documentElement;
-                    if (mainContainer) {
-                        mainContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                    window.parent.scrollTo({ top: 0, behavior: 'smooth' });
+                    window.top.postMessage({type: 'streamlit:scroll', offset: 0}, '*');
+                    try {
+                        window.parent.scrollTo({top: 0, left: 0, behavior: 'smooth'});
+                    } catch(e) {}
+                    try {
+                        var mainEl = window.parent.document.querySelector('section.main');
+                        if (mainEl) { mainEl.scrollTop = 0; }
+                    } catch(e) {}
                 </script>
                 """,
                 height=0,
