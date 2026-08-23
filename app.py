@@ -254,7 +254,7 @@ else:
                             if total_qty > 0:
                                 st.caption(f"✅ **{total_qty}** in library")
                             else:
-                                st.caption(f" ")
+                                st.caption(f"{total_qty} owned")
                             set_name = card.get("set_name", "Unknown Set")
                             released_date = card.get("released_at", "")
                             st.caption(f"{set_name}")
