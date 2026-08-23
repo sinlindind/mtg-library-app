@@ -298,17 +298,21 @@ else:
         if not active_cards:
             st.info("Your library is currently empty. Use Search to add cards!")
         else:
+            # 1. Group active rows by scryfall_id
+            grouped_library = {}
+            for item in active_cards:
+                sid = item.get("scryfall_id")
+                if sid not in grouped_library:
+                    grouped_library[sid] = []
+                grouped_library[sid].append(item)
+
+            # 2. Render cards in a 3-column grid
             cols = st.columns(3)
-            for idx, item in enumerate(active_cards):
+            for idx, (scryfall_id, variants) in enumerate(grouped_library.items()):
                 col = cols[idx % 3]
-                entry_id = item.get("id")
-                scryfall_id = item.get("scryfall_id")
                 card_data = get_card_by_id(scryfall_id) if scryfall_id else None
                 tcg_url = card_data.get("purchase_uris", {}).get("tcgplayer") if card_data else None
-
-                qty = item.get("quantity", 0)
-                finish = item.get("finish", "nonfoil").capitalize()
-                cond = item.get("condition", "Near Mint")
+                total_qty = sum(v.get("quantity", 0) for v in variants)
 
                 with col:
                     with st.container(border=True):
@@ -316,54 +320,76 @@ else:
                             img_url = get_card_image_url(card_data, size="normal")
                             st.image(img_url, use_container_width=True)
                             st.markdown(f"**{card_data.get('name', 'Unknown Card')}**")
-                            st.caption(f"Set: {card_data.get('set_name', 'Unknown')}")
+                            st.caption(f"Set: {card_data.get('set_name', 'Unknown')} • **Total: {total_qty}x**")
                         else:
                             st.caption("Card details unavailable")
 
-                        st.markdown(f"• **{qty}x** {finish} ({cond})")
+                        st.divider()
 
-                        # Quick Controls: Increment, Decrement, Edit/Remove Popover
-                        c_dec, c_inc, c_edit = st.columns([1, 1, 1.2])
-                        
-                        with c_dec:
-                            if st.button("➖ 1", key=f"lib_dec_{entry_id}_{idx}", use_container_width=True):
-                                new_qty = qty - 1
-                                if new_qty <= 0:
-                                    remove_from_library(entry_id)
-                                    st.toast("Card removed from library", icon="🗑️")
-                                else:
-                                    update_library_card(entry_id, quantity=new_qty)
-                                    st.toast(f"Updated quantity to {new_qty}", icon="📉")
-                                st.rerun()
+                        # 3. Render each unique variant (Finish + Condition)
+                        for var in variants:
+                            entry_id = var.get("id")
+                            qty = var.get("quantity", 0)
+                            finish = var.get("finish", "nonfoil").capitalize()
+                            cond = var.get("condition", "Near Mint")
 
-                        with c_inc:
-                            if st.button("➕ 1", key=f"lib_inc_{entry_id}_{idx}", use_container_width=True):
-                                update_library_card(entry_id, quantity=qty + 1)
-                                st.toast(f"Updated quantity to {qty + 1}", icon="📈")
-                                st.rerun()
+                            st.markdown(f"**{qty}x** {finish} (`{cond}`)")
 
-                        with c_edit:
-                            with st.popover("⚙️ Edit", use_container_width=True):
-                                edit_qty = st.number_input(
-                                    "Quantity", min_value=1, value=qty, step=1, key=f"edit_qty_{entry_id}_{idx}"
-                                )
-                                edit_cond = st.selectbox(
-                                    "Condition",
-                                    ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
-                                    index=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"].index(cond) if cond in ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"] else 0,
-                                    key=f"edit_cond_{entry_id}_{idx}"
-                                )
-
-                                if st.button("Save Changes", key=f"save_lib_{entry_id}_{idx}", use_container_width=True):
-                                    update_library_card(entry_id, quantity=edit_qty, condition=edit_cond)
-                                    st.toast("Updated entry!", icon="✅")
+                            c_dec, c_inc, c_edit = st.columns([1, 1, 1.2])
+                            
+                            with c_dec:
+                                if st.button("➖ 1", key=f"lib_dec_{entry_id}", use_container_width=True):
+                                    new_qty = qty - 1
+                                    if new_qty <= 0:
+                                        remove_from_library(entry_id)
+                                        st.toast("Variant removed", icon="🗑️")
+                                    else:
+                                        update_library_card(entry_id, quantity=new_qty)
+                                        st.toast(f"Updated quantity to {new_qty}", icon="📉")
                                     st.rerun()
 
-                                st.divider()
-                                if st.button("🗑️ Delete Entry", key=f"del_lib_{entry_id}_{idx}", use_container_width=True):
-                                    remove_from_library(entry_id)
-                                    st.toast("Entry deleted", icon="🗑️")
+                            with c_inc:
+                                if st.button("➕ 1", key=f"lib_inc_{entry_id}", use_container_width=True):
+                                    update_library_card(entry_id, quantity=qty + 1)
+                                    st.toast(f"Updated quantity to {qty + 1}", icon="📈")
                                     st.rerun()
+
+                            with c_edit:
+                                with st.popover("⚙️ Edit", use_container_width=True):
+                                    edit_qty = st.number_input(
+                                        "Quantity", min_value=1, value=qty, step=1, key=f"edit_qty_{entry_id}"
+                                    )
+                                    if st.button("Save Quantity", key=f"save_lib_{entry_id}", use_container_width=True):
+                                        update_library_card(entry_id, quantity=edit_qty)
+                                        st.toast("Updated quantity!", icon="✅")
+                                        st.rerun()
+
+                                    st.divider()
+                                    if st.button("🗑️ Delete Variant", key=f"del_lib_{entry_id}", use_container_width=True):
+                                        remove_from_library(entry_id)
+                                        st.toast("Variant deleted", icon="🗑️")
+                                        st.rerun()
+
+                        # 4. Add new condition/finish variant inline
+                        with st.popover("➕ Add Variant", use_container_width=True):
+                            new_finish = st.selectbox("Finish", ["nonfoil", "foil", "etched"], key=f"add_fin_{scryfall_id}")
+                            new_cond = st.selectbox(
+                                "Condition",
+                                ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
+                                key=f"add_cond_{scryfall_id}"
+                            )
+                            new_qty = st.number_input("Quantity", min_value=1, value=1, step=1, key=f"add_qty_{scryfall_id}")
+
+                            if st.button("Add to Library", key=f"add_var_btn_{scryfall_id}", use_container_width=True):
+                                add_card_to_library(
+                                    user_id=user["id"],
+                                    scryfall_id=scryfall_id,
+                                    finish=new_finish,
+                                    quantity=new_qty,
+                                    condition=new_cond
+                                )
+                                st.toast("Added variant!", icon="✅")
+                                st.rerun()
 
                         if tcg_url:
                             st.link_button("🛒 TCGPlayer", tcg_url, use_container_width=True)
