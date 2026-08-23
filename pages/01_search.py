@@ -1,9 +1,21 @@
 import streamlit as st
 import requests
+import streamlit.components.v1 as components
 from streamlit_searchbox import st_searchbox
 
 from services.database import add_card_to_library, get_user_library, add_to_wishlist, remove_from_wishlist, get_user_wishlist
 from services.scryfall import search_cards, get_card_image_url
+
+# Configure page & force show sidebar
+st.set_page_config(page_title="Card Search", page_icon="🔍", layout="wide", initial_sidebar_state="expanded")
+
+# Override any hidden sidebar CSS leftover from app.py
+st.markdown("""
+    <style>
+        [data-testid="stSidebar"] {display: flex !important;}
+        [data-testid="collapsedControl"] {display: flex !important;}
+    </style>
+""", unsafe_allow_html=True)
 
 # Guard route for unauthenticated users
 if "user" not in st.session_state or st.session_state.user is None:
@@ -63,8 +75,8 @@ with st.sidebar:
                 st.session_state.active_search_label = query
                 st.session_state.active_search_results = results
                 st.session_state.searchbox_key_counter += 1
-                # Force navigation back to page top on fresh search
-                st.switch_page("pages/01_search.py")
+                st.session_state.should_scroll_top = True
+                st.rerun()
 
     st.divider()
     if st.button("Logout", use_container_width=True):
@@ -83,16 +95,18 @@ else:
     if not results:
         st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
     else:
-        # EXECUTE PARENT WINDOW SCROLL TO TOP
-        components.html(
-            """
-            <script>
-                window.parent.document.querySelector('section.main').scrollTo(0, 0);
-            </script>
-            """,
-            height=0,
-            width=0
-        )
+        # EXECUTE PARENT WINDOW SCROLL TO TOP WHEN NEW SEARCH IS PERFORMED
+        if st.session_state.get("should_scroll_top", False):
+            st.session_state.should_scroll_top = False
+            components.html(
+                """
+                <script>
+                    window.parent.document.querySelector('section.main').scrollTo(0, 0);
+                </script>
+                """,
+                height=0,
+                width=0
+            )
 
         col_info, col_sort = st.columns([3, 1], vertical_alignment="center")
         

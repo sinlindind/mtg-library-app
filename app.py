@@ -30,11 +30,11 @@ if "verify_token" in query_params:
 if st.session_state.user:
     st.switch_page("pages/01_search.py")
 
-# UNAUTHENTICATED VIEW (Login / Register)
+# UNAUTHENTICATED VIEW (Hide Sidebar strictly on login/register view)
 st.markdown("""
     <style>
-        [data-testid="stSidebar"] {display: none;}
-        [data-testid="collapsedControl"] {display: none;}
+        [data-testid="stSidebar"] {display: none !important;}
+        [data-testid="collapsedControl"] {display: none !important;}
     </style>
 """, unsafe_allow_html=True)
 

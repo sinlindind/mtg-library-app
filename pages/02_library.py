@@ -2,6 +2,15 @@ import streamlit as st
 from services.database import get_user_library, update_library_card, remove_from_library, add_card_to_library
 from services.scryfall import get_card_by_id, get_card_image_url
 
+st.set_page_config(page_title="My Library", page_icon="📚", layout="wide", initial_sidebar_state="expanded")
+
+st.markdown("""
+    <style>
+        [data-testid="stSidebar"] {display: flex !important;}
+        [data-testid="collapsedControl"] {display: flex !important;}
+    </style>
+""", unsafe_allow_html=True)
+
 if "user" not in st.session_state or st.session_state.user is None:
     st.switch_page("app.py")
 
