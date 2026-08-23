@@ -103,31 +103,32 @@ else:
         if st.session_state.get("should_scroll_top", False):
             st.session_state.should_scroll_top = False
             
-            # Using key ensures Streamlit destroys and rebuilds this iframe on every search counter increment
-            components.html(
-                f"""
-                <script>
-                    function scrollToTop() {{
-                        const doc = window.parent.document;
-                        // Target main scroll container in standard Streamlit layout
-                        const mainSection = doc.querySelector('section.main');
-                        if (mainSection) {{
-                            mainSection.scrollTo({{ top: 0, left: 0, behavior: 'instant' }});
-                        }}
-                        // Fallback for app containers
-                        const appView = doc.querySelector('.stAppViewMain') || doc.querySelector('.stApp');
-                        if (appView) {{
-                            appView.scrollTo({{ top: 0, left: 0, behavior: 'instant' }});
-                        }}
-                        window.parent.scrollTo(0, 0);
-                    }}
-                    setTimeout(scrollToTop, 50);
-                </script>
-                """,
-                height=0,
-                width=0,
-                key=f"scroll_component_{st.session_state.searchbox_key_counter}"
-            )
+            # Wrap in a uniquely-keyed container to force a fresh iframe mount on each search
+            scroll_container = st.container(key=f"scroll_box_{st.session_state.searchbox_key_counter}")
+            with scroll_container:
+                components.html(
+                    """
+                    <script>
+                        function scrollToTop() {
+                            const doc = window.parent.document;
+                            // Target main scroll container in standard Streamlit layout
+                            const mainSection = doc.querySelector('section.main');
+                            if (mainSection) {
+                                mainSection.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                            }
+                            // Fallback for alternate Streamlit app containers
+                            const appView = doc.querySelector('.stAppViewMain') || doc.querySelector('.stApp');
+                            if (appView) {
+                                appView.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                            }
+                            window.parent.scrollTo(0, 0);
+                        }
+                        setTimeout(scrollToTop, 100);
+                    </script>
+                    """,
+                    height=0,
+                    width=0
+                )
 
         col_info, col_sort = st.columns([3, 1], vertical_alignment="center")
         
