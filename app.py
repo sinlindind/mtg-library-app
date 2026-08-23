@@ -124,17 +124,15 @@ else:
         <style>
             [data-testid="stSidebarNav"] {display: none;}
             .block-container { 
-                padding-top: 4rem !important; 
+                padding-top: 2.5rem !important; 
                 padding-bottom: 2rem !important;
                 padding-left: 2rem !important;
                 padding-right: 2rem !important;
                 max-width: 98% !important;
             }
-            header[data-testid="stHeader"] {
-                background: transparent !important;
-                z-index: 1 !important;
-            }
-            div[data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
+            header[data-testid="stHeader"] { background: transparent !important; z-index: 1 !important; }
+            div[data-testid="stVerticalBlock"] { gap: 0.35rem !important; }
+            .stButton button { padding: 0.2rem 0.5rem !important; font-size: 0.85rem !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -172,6 +170,15 @@ else:
             st.session_state.user = None
             st.rerun()
 
+    # Helper function for parsing prices cleanly
+    def parse_price(c):
+        prices = c.get("prices", {}) if isinstance(c, dict) else {}
+        p = prices.get("usd") or prices.get("usd_foil") or "0"
+        try:
+            return float(p)
+        except (ValueError, TypeError):
+            return 0.0
+
     # --- SCREEN 1: SEARCH ---
     if menu_selection == "Search":
         if "active_sort_option" not in st.session_state:
@@ -185,10 +192,10 @@ else:
             if not results:
                 st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
             else:
-                col_info, col_sort = st.columns([2.5, 1.5], vertical_alignment="center")
+                col_info, col_sort = st.columns([3, 1], vertical_alignment="center")
                 
                 with col_info:
-                    st.markdown(f"### **{st.session_state.active_search_label}** `({len(results)} printings)`")
+                    st.subheader(f"🔍 **{st.session_state.active_search_label}** ({len(results)} printings)")
 
                 def on_sort_change():
                     st.session_state.active_sort_option = st.session_state.search_sort_dropdown
@@ -201,7 +208,6 @@ else:
                         "Price: Low to High",
                         "Name (A-Z)"
                     ]
-                    
                     current_idx = sort_options.index(st.session_state.active_sort_option) if st.session_state.active_sort_option in sort_options else 0
                     
                     sort_option = st.selectbox(
@@ -212,14 +218,6 @@ else:
                         on_change=on_sort_change,
                         label_visibility="collapsed"
                     )
-
-                def parse_price(c):
-                    prices = c.get("prices", {})
-                    p = prices.get("usd") or prices.get("usd_foil") or "0"
-                    try:
-                        return float(p)
-                    except ValueError:
-                        return 0.0
 
                 sorted_results = list(results)
                 if sort_option == "Release Date (Newest First)":
@@ -233,189 +231,129 @@ else:
                 elif sort_option == "Name (A-Z)":
                     sorted_results.sort(key=lambda x: x.get("name", "").lower())
 
+                # Compact 3-Column Display Grid
+                cols = st.columns(3)
                 for idx, card in enumerate(sorted_results):
+                    col = cols[idx % 3]
                     card_id = f"{card['id']}_{idx}"
                     owned_entries = [item for item in user_library if item.get("scryfall_id") == card["id"]]
                     is_in_wishlist = card["id"] in user_wishlist
+                    tcg_url = card.get("purchase_uris", {}).get("tcgplayer")
                     
-                    col_img, col_info, col_actions = st.columns([2, 2.8, 2])
-                    
-                    with col_img:
-                        img_url = get_card_image_url(card, size="large")
-                        st.image(img_url, use_container_width=True)
-                    
-                    with col_info:
-                        st.markdown(f"#### {card.get('name', 'Unknown Card')}")
-                        set_name = card.get("set_name", "Unknown Set")
-                        set_code = card.get("set", "").upper()
-                        released_date = card.get("released_at", "")
-                        
-                        st.caption(f"Set: **{set_name}**")
-                        st.caption(f"Released: {released_date}")
-                        
-                        prices = card.get("prices", {})
-                        usd = prices.get("usd")
-                        usd_foil = prices.get("usd_foil")
-
-                        reg_str = f"\\${usd}" if usd else "N/A"
-                        foil_str = f"\\${usd_foil}" if usd_foil else "N/A"
-
-                        st.caption(f"Reg: {reg_str} / Foil: {foil_str}")
-                        
-                        valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
-                        if valid_owned:
-                            for item in valid_owned:
-                                qty = item.get("quantity")
-                                finish = item.get("finish", "nonfoil").capitalize()
-                                cond = item.get("condition", "Near Mint")
-                                st.caption(f"In Library: **{qty}x** {finish} ({cond})")
-                    
-                    with col_actions:
-                        c_reg, c_foil = st.columns(2)
-                        
-                        with c_reg:
-                            if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
-                                add_card_to_library(
-                                    user_id=user["id"],
-                                    scryfall_id=card["id"],
-                                    finish="nonfoil",
-                                    quantity=1,
-                                    condition="Near Mint",
-                                    purchase_price=float(usd) if usd else None
-                                )
-                                st.toast("Added 1x Regular!", icon="✅")
-                                st.rerun()
-
-                        with c_foil:
-                            if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
-                                add_card_to_library(
-                                    user_id=user["id"],
-                                    scryfall_id=card["id"],
-                                    finish="foil",
-                                    quantity=1,
-                                    condition="Near Mint",
-                                    purchase_price=float(usd_foil) if usd_foil else None
-                                )
-                                st.toast("Added 1x Foil!", icon="✅")
-                                st.rerun()
-
-                        with st.popover("⚙️ Custom...", use_container_width=True):
-                            custom_finish = st.selectbox("Finish", ["nonfoil", "foil"], key=f"c_fin_{card_id}")
-                            custom_qty = st.number_input("Quantity", min_value=1, value=1, step=1, key=f"c_qty_{card_id}")
-                            custom_cond = st.selectbox(
-                                "Condition", 
-                                ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"],
-                                key=f"c_cond_{card_id}"
-                            )
+                    with col:
+                        with st.container(border=True):
+                            img_url = get_card_image_url(card, size="large")
+                            st.image(img_url, use_container_width=True)
                             
-                            if st.button("Add Entry", key=f"c_btn_{card_id}", use_container_width=True):
-                                price_val = usd_foil if custom_finish == "foil" else usd
-                                add_card_to_library(
-                                    user_id=user["id"],
-                                    scryfall_id=card["id"],
-                                    finish=custom_finish,
-                                    quantity=custom_qty,
-                                    condition=custom_cond,
-                                    purchase_price=float(price_val) if price_val else None
-                                )
-                                st.toast(f"Added {custom_qty}x {custom_finish.capitalize()}!", icon="✅")
-                                st.rerun()
+                            st.markdown(f"**{card.get('name', 'Unknown')}**")
+                            set_name = card.get("set_name", "Unknown Set")
+                            released_date = card.get("released_at", "")
+                            st.caption(f"{set_name} • {released_date}")
+                            
+                            prices = card.get("prices", {})
+                            usd = prices.get("usd")
+                            usd_foil = prices.get("usd_foil")
+                            st.caption(f"💵 Reg: **${usd if usd else 'N/A'}** | Foil: **${usd_foil if usd_foil else 'N/A'}**")
 
-                        # --- WISHLIST CHECKBOX ---
-                        wishlist_state = st.checkbox(
-                            "❤️ Wishlist", 
-                            value=is_in_wishlist, 
-                            key=f"wishlist_chk_{card_id}"
-                        )
-                        if wishlist_state != is_in_wishlist:
-                            if wishlist_state:
-                                add_to_wishlist(user["id"], card["id"])
-                                st.toast("Added to Wishlist!", icon="❤️")
-                            else:
-                                remove_from_wishlist(user["id"], card["id"])
-                                st.toast("Removed from Wishlist", icon="🗑️")
-                            st.rerun()
+                            valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
+                            if valid_owned:
+                                total_qty = sum(item.get("quantity", 0) for item in valid_owned)
+                                st.caption(f"📦 In Library: **{total_qty}x**")
 
-                    st.divider()
+                            # Add/Wishlist Controls
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
+                                    add_card_to_library(user["id"], card["id"], "nonfoil", 1, "Near Mint", float(usd) if usd else None)
+                                    st.toast("Added 1x Regular!", icon="✅")
+                                    st.rerun()
+                            with c2:
+                                if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
+                                    add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
+                                    st.toast("Added 1x Foil!", icon="✅")
+                                    st.rerun()
+
+                            c_wish, c_tcg = st.columns(2)
+                            with c_wish:
+                                wishlist_state = st.checkbox("❤️ Wishlist", value=is_in_wishlist, key=f"wishlist_chk_{card_id}")
+                                if wishlist_state != is_in_wishlist:
+                                    if wishlist_state:
+                                        add_to_wishlist(user["id"], card["id"])
+                                        st.toast("Added to Wishlist!", icon="❤️")
+                                    else:
+                                        remove_from_wishlist(user["id"], card["id"])
+                                        st.toast("Removed from Wishlist", icon="🗑️")
+                                    st.rerun()
+                            
+                            with c_tcg:
+                                if tcg_url:
+                                    st.link_button("🛒 TCGPlayer", tcg_url, use_container_width=True)
 
     # --- SCREEN 2: MY LIBRARY ---
     elif menu_selection == "My Library":
-        st.title("📦 My Library")
-        
         active_cards = [card for card in user_library if card.get("quantity", 0) > 0]
+        
+        st.subheader(f"📦 My Library ({len(active_cards)} items)")
         
         if not active_cards:
             st.info("Your library is currently empty. Use Search to add cards!")
         else:
-            st.success(f"Total entries in library: **{len(active_cards)}**")
-            
+            cols = st.columns(3)
             for idx, item in enumerate(active_cards):
+                col = cols[idx % 3]
                 scryfall_id = item.get("scryfall_id")
                 card_data = get_card_by_id(scryfall_id) if scryfall_id else None
-                
-                col_img, col_info, col_actions = st.columns([1, 2, 2])
-                
-                with col_img:
-                    if card_data:
-                        img_url = get_card_image_url(card_data, size="small")
-                        st.image(img_url, width=150)
-                    else:
-                        st.caption("No image available")
-                
-                with col_info:
-                    card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
-                    st.subheader(card_name)
-                    
-                    if card_data:
-                        set_name = card_data.get("set_name", "Unknown Set")
-                        set_code = card_data.get("set", "").upper()
-                        st.markdown(f"**Set:** {set_name} (`{set_code}`)")
-                    
-                    qty = item.get("quantity", 0)
-                    finish = item.get("finish", "nonfoil").capitalize()
-                    cond = item.get("condition", "Near Mint")
-                    
-                    st.markdown("---")
-                    st.markdown(f"• **{qty}x** {finish} ({cond})")
-                
-                with col_actions:
-                    st.empty()
-                
-                st.divider()
+                tcg_url = card_data.get("purchase_uris", {}).get("tcgplayer") if card_data else None
+
+                with col:
+                    with st.container(border=True):
+                        if card_data:
+                            img_url = get_card_image_url(card_data, size="normal")
+                            st.image(img_url, use_container_width=True)
+                            st.markdown(f"**{card_data.get('name', 'Unknown Card')}**")
+                            st.caption(f"Set: {card_data.get('set_name', 'Unknown')}")
+                        else:
+                            st.caption("Card details unavailable")
+
+                        qty = item.get("quantity", 0)
+                        finish = item.get("finish", "nonfoil").capitalize()
+                        cond = item.get("condition", "Near Mint")
+                        st.markdown(f"• **{qty}x** {finish} ({cond})")
+
+                        if tcg_url:
+                            st.link_button("🛒 Buy on TCGPlayer", tcg_url, use_container_width=True)
 
     # --- SCREEN 3: WISHLIST ---
     elif menu_selection == "Wishlist":
-        st.title("❤️ My Wishlist")
+        st.subheader(f"❤️ My Wishlist ({len(user_wishlist)} items)")
         
         if not user_wishlist:
-            st.info("Your wishlist is empty. Use Search to check cards onto your wishlist!")
+            st.info("Your wishlist is empty. Use Search to add cards!")
         else:
-            st.success(f"Wishlist count: **{len(user_wishlist)}** cards")
-            
+            cols = st.columns(3)
             for idx, scryfall_id in enumerate(user_wishlist):
+                col = cols[idx % 3]
                 card_data = get_card_by_id(scryfall_id)
-                col_img, col_info, col_actions = st.columns([1, 2.5, 1.5])
-                
-                with col_img:
-                    if card_data:
-                        img_url = get_card_image_url(card_data, size="small")
-                        st.image(img_url, width=150)
-                    else:
-                        st.caption("No image available")
-                        
-                with col_info:
-                    if card_data:
-                        st.subheader(card_data.get("name", "Unknown Card"))
-                        set_name = card_data.get("set_name", "Unknown Set")
-                        set_code = card_data.get("set", "").upper()
-                        st.caption(f"Set: **{set_name}** (`{set_code}`)")
-                        prices = card_data.get("prices", {})
-                        st.caption(f"Price: \\${prices.get('usd', 'N/A')}")
-                
-                with col_actions:
-                    if st.button("❌ Remove", key=f"rem_wish_{scryfall_id}_{idx}", use_container_width=True):
-                        remove_from_wishlist(user["id"], scryfall_id)
-                        st.toast("Removed from Wishlist", icon="🗑️")
-                        st.rerun()
-                        
-                st.divider()
+                tcg_url = card_data.get("purchase_uris", {}).get("tcgplayer") if card_data else None
+
+                with col:
+                    with st.container(border=True):
+                        if card_data:
+                            img_url = get_card_image_url(card_data, size="normal")
+                            st.image(img_url, use_container_width=True)
+                            st.markdown(f"**{card_data.get('name', 'Unknown Card')}**")
+                            st.caption(f"Set: {card_data.get('set_name', 'Unknown')}")
+                            prices = card_data.get("prices", {})
+                            st.caption(f"Price: **${prices.get('usd', 'N/A')}**")
+                        else:
+                            st.caption("Card details unavailable")
+
+                        c_rem, c_tcg = st.columns(2)
+                        with c_rem:
+                            if st.button("❌ Remove", key=f"rem_wish_{scryfall_id}_{idx}", use_container_width=True):
+                                remove_from_wishlist(user["id"], scryfall_id)
+                                st.toast("Removed from Wishlist", icon="🗑️")
+                                st.rerun()
+                        with c_tcg:
+                            if tcg_url:
+                                st.link_button("🛒 TCGPlayer", tcg_url, use_container_width=True)
