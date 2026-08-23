@@ -293,7 +293,7 @@ else:
     elif menu_selection == "My Library":
         active_cards = [card for card in user_library if card.get("quantity", 0) > 0]
         
-        st.subheader(f"📦 My Library ({len(active_cards)} items)")
+        st.subheader(f"My Library ({len(active_cards)} items)")
         
         if not active_cards:
             st.info("Your library is currently empty. Use Search to add cards!")
@@ -319,7 +319,10 @@ else:
                         if card_data:
                             img_url = get_card_image_url(card_data, size="normal")
                             st.image(img_url, use_container_width=True)
-                            st.markdown(f"**{card_data.get('name', 'Unknown Card')}**")
+                            if tcg_url:
+                                st.markdown(f"**{card.get('name', 'Unknown')}** ([TCG]({tcg_url}))")
+                            else:
+                                st.markdown(f"**{card.get('name', 'Unknown')}**")
                             st.caption(f"Set: {card_data.get('set_name', 'Unknown')} • **Total: {total_qty}x**")
                         else:
                             st.caption("Card details unavailable")
