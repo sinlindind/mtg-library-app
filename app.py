@@ -262,11 +262,6 @@ else:
                             usd_foil = prices.get("usd_foil")
                             st.caption(f"Reg: **\\${usd if usd else 'N/A'}** | Foil: **\\${usd_foil if usd_foil else 'N/A'}**")
 
-                            valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
-                            if valid_owned:
-                                total_qty = sum(item.get("quantity", 0) for item in valid_owned)
-                                st.caption(f"In Library: **{total_qty}x**")
-
                             # Add/Wishlist Controls
                             c1, c2 = st.columns(2)
                             with c1:
