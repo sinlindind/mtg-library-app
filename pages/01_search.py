@@ -91,6 +91,9 @@ with st.sidebar:
 if "active_sort_option" not in st.session_state:
     st.session_state.active_sort_option = "Release Date (Newest First)"
 
+# 1. ANCHOR ELEMENT AT THE VERY TOP OF THE PAGE
+st.markdown("<div id='page-top'></div>", unsafe_allow_html=True)
+
 if not st.session_state.active_search_label:
     st.info("👈 Use the search bar in the sidebar to find Magic cards.")
 else:
@@ -99,31 +102,33 @@ else:
     if not results:
         st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
     else:
-        # EXECUTE PARENT WINDOW SCROLL TO TOP WHEN NEW SEARCH IS PERFORMED
+        # EXECUTE SCROLL INTO VIEW
         if st.session_state.get("should_scroll_top", False):
             st.session_state.should_scroll_top = False
             
-            # Wrap in a uniquely-keyed container to force a fresh iframe mount on each search
             scroll_container = st.container(key=f"scroll_box_{st.session_state.searchbox_key_counter}")
             with scroll_container:
                 components.html(
                     """
                     <script>
-                        function scrollToTop() {
-                            const doc = window.parent.document;
-                            // Target main scroll container in standard Streamlit layout
-                            const mainSection = doc.querySelector('section.main');
-                            if (mainSection) {
-                                mainSection.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                        function scrollToAnchor() {
+                            try {
+                                const doc = window.parent.document;
+                                const topAnchor = doc.getElementById('page-top');
+                                if (topAnchor) {
+                                    topAnchor.scrollIntoView({ behavior: 'instant', block: 'start' });
+                                } else {
+                                    // Direct element fallback
+                                    const mainSec = doc.querySelector('section.main');
+                                    if (mainSec) mainSec.scrollTop = 0;
+                                }
+                            } catch (e) {
+                                console.log('Scroll error:', e);
                             }
-                            // Fallback for alternate Streamlit app containers
-                            const appView = doc.querySelector('.stAppViewMain') || doc.querySelector('.stApp');
-                            if (appView) {
-                                appView.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-                            }
-                            window.parent.scrollTo(0, 0);
                         }
-                        setTimeout(scrollToTop, 100);
+                        // Trigger immediately and after brief layout render window
+                        scrollToAnchor();
+                        setTimeout(scrollToAnchor, 150);
                     </script>
                     """,
                     height=0,
