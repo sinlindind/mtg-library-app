@@ -249,6 +249,9 @@ else:
                                 st.markdown(f"**{card.get('name', 'Unknown')}** ([TCG]({tcg_url}))")
                             else:
                                 st.markdown(f"**{card.get('name', 'Unknown')}**")
+                            valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
+                            total_qty = sum(item.get("quantity", 0) for item in valid_owned)
+                            st.caption(f"**{total_qty}x** Owned")
                             set_name = card.get("set_name", "Unknown Set")
                             released_date = card.get("released_at", "")
                             st.caption(f"{set_name}")
