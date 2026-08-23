@@ -262,7 +262,7 @@ else:
                                 st.caption(f"In Library: **{total_qty}x**")
                             
                             if tcg_url:
-                                st.markdown(f"[TCG Player]({tcg_url})")
+                                st.caption(f"[TCG Player]({tcg_url})")
 
                             # Add/Wishlist Controls
                             c1, c2 = st.columns(2)
