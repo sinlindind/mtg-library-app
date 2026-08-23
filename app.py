@@ -248,17 +248,21 @@ else:
                             st.markdown(f"**{card.get('name', 'Unknown')}**")
                             set_name = card.get("set_name", "Unknown Set")
                             released_date = card.get("released_at", "")
-                            st.caption(f"{set_name} • {released_date}")
+                            st.caption(f"{set_name}")
+                            st.caption(f"{released_date}")
                             
                             prices = card.get("prices", {})
                             usd = prices.get("usd")
                             usd_foil = prices.get("usd_foil")
-                            st.caption(f"💵 Reg: **${usd if usd else 'N/A'}** | Foil: **${usd_foil if usd_foil else 'N/A'}**")
+                            st.caption(f"Reg: **\\${usd if usd else 'N/A'}** | Foil: **\\${usd_foil if usd_foil else 'N/A'}**")
 
                             valid_owned = [item for item in owned_entries if item.get("quantity", 0) > 0]
                             if valid_owned:
                                 total_qty = sum(item.get("quantity", 0) for item in valid_owned)
-                                st.caption(f"📦 In Library: **{total_qty}x**")
+                                st.caption(f"In Library: **{total_qty}x**")
+                            
+                            if tcg_url:
+                                st.markdown(f"[TCG Player]({tcg_url})")
 
                             # Add/Wishlist Controls
                             c1, c2 = st.columns(2)
@@ -284,10 +288,6 @@ else:
                                         remove_from_wishlist(user["id"], card["id"])
                                         st.toast("Removed from Wishlist", icon="🗑️")
                                     st.rerun()
-                            
-                            with c_tcg:
-                                if tcg_url:
-                                    st.link_button("🛒 TCGPlayer", tcg_url, use_container_width=True)
 
     # --- SCREEN 2: MY LIBRARY ---
     elif menu_selection == "My Library":
