@@ -357,22 +357,6 @@ else:
                                     st.toast(f"Updated quantity to {qty + 1}", icon="📈")
                                     st.rerun()
 
-                            with c_edit:
-                                with st.popover("⚙️ Edit", use_container_width=True):
-                                    edit_qty = st.number_input(
-                                        "Quantity", min_value=1, value=qty, step=1, key=f"edit_qty_{entry_id}"
-                                    )
-                                    if st.button("Save Quantity", key=f"save_lib_{entry_id}", use_container_width=True):
-                                        update_library_card(entry_id, quantity=edit_qty)
-                                        st.toast("Updated quantity!", icon="✅")
-                                        st.rerun()
-
-                                    st.divider()
-                                    if st.button("🗑️ Delete Variant", key=f"del_lib_{entry_id}", use_container_width=True):
-                                        remove_from_library(entry_id)
-                                        st.toast("Variant deleted", icon="🗑️")
-                                        st.rerun()
-
                         # 4. Add new condition/finish variant inline
                         with st.popover("➕ Add Variant", use_container_width=True):
                             new_finish = st.selectbox("Finish", ["nonfoil", "foil", "etched"], key=f"add_fin_{scryfall_id}")
