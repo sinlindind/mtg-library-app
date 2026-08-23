@@ -320,9 +320,9 @@ else:
                             img_url = get_card_image_url(card_data, size="normal")
                             st.image(img_url, use_container_width=True)
                             if tcg_url:
-                                st.markdown(f"**{card.get('name', 'Unknown')}** ([TCG]({tcg_url}))")
+                                st.markdown(f"**{card_data.get('name', 'Unknown')}** ([TCG]({tcg_url}))")
                             else:
-                                st.markdown(f"**{card.get('name', 'Unknown')}**")
+                                st.markdown(f"**{card_data.get('name', 'Unknown')}**")
                             st.caption(f"Set: {card_data.get('set_name', 'Unknown')} • **Total: {total_qty}x**")
                         else:
                             st.caption("Card details unavailable")
