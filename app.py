@@ -162,7 +162,12 @@ else:
                         st.session_state.active_search_label = query
                         st.session_state.active_search_results = results
                         st.session_state.searchbox_key_counter += 1
-                        st.session_state.should_scroll_top = True
+                        
+                        # INCREMENT RESULT KEY COUNTER TO RESET CONTAINER SCROLL
+                        if "results_key_counter" not in st.session_state:
+                            st.session_state.results_key_counter = 0
+                        st.session_state.results_key_counter += 1
+                        
                         st.rerun()
 
             st.divider()
