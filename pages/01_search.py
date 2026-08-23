@@ -99,10 +99,10 @@ else:
     if not results:
         st.warning(f"No cards found matching '{st.session_state.active_search_label}'.")
     else:
-        # 1. ANCHOR ELEMENT WITH 100PX OFFSET PADDING
+        # 1. ANCHOR ELEMENT WITH OFFSET PADDING
         st.markdown("<div id='page-top' style='scroll-margin-top: 100px;'></div>", unsafe_allow_html=True)
 
-        # 2. SCROLL TO ANCHOR WITH EXPEXCT OFFSET
+        # 2. ONLY SCROLLS ON NEW SEARCH (should_scroll_top = True)
         if st.session_state.get("should_scroll_top", False):
             st.session_state.should_scroll_top = False
             
@@ -169,6 +169,11 @@ else:
         elif sort_option == "Name (A-Z)":
             sorted_results.sort(key=lambda x: x.get("name", "").lower())
 
+        # CALLBACK HANDLER FOR ADDING CARDS WITHOUT SCROLL JUMP
+        def handle_add_card(card_id, finish, price, toast_msg):
+            add_card_to_library(user["id"], card_id, finish, 1, "Near Mint", float(price) if price else None)
+            st.toast(toast_msg, icon="✅")
+
         cols = st.columns(3)
         for idx, card in enumerate(sorted_results):
             col = cols[idx % 3]
@@ -209,27 +214,39 @@ else:
                     c1, c2 = st.columns(2)
                     if has_nonfoil and has_foil:
                         with c1:
-                            if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
-                                add_card_to_library(user["id"], card["id"], "nonfoil", 1, "Near Mint", float(usd) if usd else None)
-                                st.toast("Added 1x Regular!", icon="✅")
-                                st.rerun()
+                            st.button(
+                                "➕ 1x Reg",
+                                key=f"qadd_reg_{card_id}",
+                                use_container_width=True,
+                                on_click=handle_add_card,
+                                args=(card["id"], "nonfoil", usd, "Added 1x Regular!")
+                            )
                         with c2:
-                            if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
-                                add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
-                                st.toast("Added 1x Foil!", icon="✅")
-                                st.rerun()
+                            st.button(
+                                "✨ 1x Foil",
+                                key=f"qadd_foil_{card_id}",
+                                use_container_width=True,
+                                on_click=handle_add_card,
+                                args=(card["id"], "foil", usd_foil, "Added 1x Foil!")
+                            )
                     elif has_nonfoil:
                         with c1:
-                            if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
-                                add_card_to_library(user["id"], card["id"], "nonfoil", 1, "Near Mint", float(usd) if usd else None)
-                                st.toast("Added 1x Regular!", icon="✅")
-                                st.rerun()
+                            st.button(
+                                "➕ 1x Reg",
+                                key=f"qadd_reg_{card_id}",
+                                use_container_width=True,
+                                on_click=handle_add_card,
+                                args=(card["id"], "nonfoil", usd, "Added 1x Regular!")
+                            )
                     elif has_foil:
                         with c1:
-                            if st.button("✨ 1x Foil", key=f"qadd_foil_{card_id}", use_container_width=True):
-                                add_card_to_library(user["id"], card["id"], "foil", 1, "Near Mint", float(usd_foil) if usd_foil else None)
-                                st.toast("Added 1x Foil!", icon="✅")
-                                st.rerun()
+                            st.button(
+                                "✨ 1x Foil",
+                                key=f"qadd_foil_{card_id}",
+                                use_container_width=True,
+                                on_click=handle_add_card,
+                                args=(card["id"], "foil", usd_foil, "Added 1x Foil!")
+                            )
 
                     c_wish, c_tcg = st.columns(2)
                     with c_wish:
