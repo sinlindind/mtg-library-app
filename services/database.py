@@ -1,6 +1,5 @@
 import streamlit as st
 from supabase import create_client, Client
-import psycopg2
 
 # Initialize Supabase client
 @st.cache_resource
@@ -100,43 +99,40 @@ def get_user_library(user_id: str):
     response = supabase.table("user_cards").select("*").eq("user_id", user_id).execute()
     return response.data if response.data else []
 
-# PostgreSQL version using psycopg2
 
+# ==========================================
+# Wishlist Functions
+# ==========================================
 
 def add_to_wishlist(user_id: str, scryfall_id: str) -> bool:
-    """Adds a card to the user's wishlist in PostgreSQL."""
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            try:
-                cursor.execute(
-                    "INSERT INTO public.wishlists (user_id, scryfall_id) VALUES (%s, %s)",
-                    (user_id, scryfall_id)
-                )
-                conn.commit()
-                return True
-            except psycopg2.errors.UniqueViolation:
-                conn.rollback()
-                return False  # Already in wishlist
+    """Adds a card to the user's wishlist in Supabase."""
+    try:
+        data = {
+            "user_id": user_id,
+            "scryfall_id": scryfall_id
+        }
+        response = supabase.table("wishlists").insert(data).execute()
+        return bool(response.data)
+    except Exception:
+        return False  # Handles duplicate unique constraint gracefully
+
 
 def remove_from_wishlist(user_id: str, scryfall_id: str) -> None:
-    """Removes a card from the user's wishlist in PostgreSQL."""
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "DELETE FROM public.wishlists WHERE user_id = %s AND scryfall_id = %s",
-                (user_id, scryfall_id)
-            )
-            conn.commit()
+    """Removes a card from the user's wishlist in Supabase."""
+    supabase.table("wishlists") \
+        .delete() \
+        .eq("user_id", user_id) \
+        .eq("scryfall_id", scryfall_id) \
+        .execute()
+
 
 def get_user_wishlist(user_id: str) -> list[str]:
     """Returns a list of Scryfall IDs in the user's wishlist."""
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT scryfall_id FROM public.wishlists WHERE user_id = %s", 
-                (user_id,)
-            )
-            rows = cursor.fetchall()
-            # If using DictCursor: return [row["scryfall_id"] for row in rows]
-            # If using regular tuple cursor:
-            return [row[0] for row in rows]
+    response = supabase.table("wishlists") \
+        .select("scryfall_id") \
+        .eq("user_id", user_id) \
+        .execute()
+    
+    if response.data:
+        return [row["scryfall_id"] for row in response.data]
+    return []
