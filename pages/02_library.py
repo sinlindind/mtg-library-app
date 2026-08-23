@@ -20,6 +20,12 @@ active_cards = [card for card in user_library if card.get("quantity", 0) > 0]
 
 with st.sidebar:
     st.title(f"👤 {user['username']}")
+    st.markdown("### Navigation")
+    st.page_link("pages/01_search.py", label="Search", icon="🔍")
+    st.page_link("pages/02_library.py", label="My Library", icon="📚")
+    st.page_link("pages/03_wishlist.py", label="My Wishlist", icon="❤️")
+    st.divider()
+
     if st.button("Logout", use_container_width=True):
         st.session_state.user = None
         st.switch_page("app.py")

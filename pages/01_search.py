@@ -6,10 +6,8 @@ from streamlit_searchbox import st_searchbox
 from services.database import add_card_to_library, get_user_library, add_to_wishlist, remove_from_wishlist, get_user_wishlist
 from services.scryfall import search_cards, get_card_image_url
 
-# Configure page & force show sidebar
 st.set_page_config(page_title="Card Search", page_icon="🔍", layout="wide", initial_sidebar_state="expanded")
 
-# Override any hidden sidebar CSS leftover from app.py
 st.markdown("""
     <style>
         [data-testid="stSidebar"] {display: flex !important;}
@@ -48,9 +46,15 @@ def parse_price(c):
     except (ValueError, TypeError):
         return 0.0
 
-# Sidebar setup
+# Sidebar setup with explicit page navigation links
 with st.sidebar:
     st.title(f"👤 {user['username']}")
+    st.markdown("### Navigation")
+    st.page_link("pages/01_search.py", label="Search", icon="🔍")
+    st.page_link("pages/02_library.py", label="My Library", icon="📚")
+    st.page_link("pages/03_wishlist.py", label="My Wishlist", icon="❤️")
+    st.divider()
+
     st.markdown("### 🔍 Card Search")
     
     if "searchbox_key_counter" not in st.session_state:
