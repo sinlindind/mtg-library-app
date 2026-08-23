@@ -271,9 +271,8 @@ else:
                             has_nonfoil = "nonfoil" in available_finishes
                             has_foil = "foil" in available_finishes or "etched" in available_finishes
 
-                            
+                            c1,c2 = st.columns(2)
                             if has_nonfoil and has_foil:
-                                c1,c2 = st.columns(2)
                                 with c1:
                                     if st.button("➕ 1x Reg", key=f"qadd_reg_{card_id}", use_container_width=True):
                                         add_card_to_library(user["id"], card["id"], "nonfoil", 1, "Near Mint", float(usd) if usd else None)
