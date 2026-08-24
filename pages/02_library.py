@@ -69,6 +69,34 @@ if selected_tag_filter:
         if any(tag in card.get("tags", []) for tag in selected_tag_filter)
     ]
 
+# Dialog modal for editing tags cleanly
+@st.dialog("🏷️ Edit Tags")
+def edit_tags_dialog(entry_id, current_tags):
+    with st.form(key=f"tag_form_{entry_id}", clear_on_submit=False):
+        updated_tags = st.multiselect(
+            "Select existing tags",
+            options=sorted(list(set(all_existing_tags + current_tags))),
+            default=current_tags,
+            key=f"tag_select_{entry_id}"
+        )
+
+        new_tag_input = st.text_input(
+            "Or add a new custom tag:",
+            placeholder="e.g. Commander, Binder 1, Trade",
+            key=f"new_tag_input_{entry_id}"
+        ).strip()
+
+        submitted = st.form_submit_button("Save Tags", use_container_width=True)
+
+        if submitted:
+            final_tags = list(updated_tags)
+            if new_tag_input and new_tag_input not in final_tags:
+                final_tags.append(new_tag_input)
+
+            update_card_tags(entry_id, final_tags)
+            st.toast("Tags updated!", icon="✅")
+            st.rerun()
+
 # Fragment component to update isolated card variants without full layout recalculations
 @st.fragment
 def render_variant_row(var, scryfall_id):
@@ -83,31 +111,8 @@ def render_variant_row(var, scryfall_id):
     if current_tags:
         st.write(" ".join([f"`🏷️ {t}`" for t in current_tags]))
 
-    with st.popover("🏷️ Edit Tags", use_container_width=True):
-        with st.form(key=f"tag_form_{entry_id}", clear_on_submit=False):
-            updated_tags = st.multiselect(
-                "Select existing tags",
-                options=sorted(list(set(all_existing_tags + current_tags))),
-                default=current_tags,
-                key=f"tag_select_{entry_id}"
-            )
-
-            new_tag_input = st.text_input(
-                "Or add a new custom tag:",
-                placeholder="e.g. Commander, Binder 1, Trade",
-                key=f"new_tag_input_{entry_id}"
-            ).strip()
-
-            submitted = st.form_submit_button("Save Tags", use_container_width=True)
-
-            if submitted:
-                final_tags = list(updated_tags)
-                if new_tag_input and new_tag_input not in final_tags:
-                    final_tags.append(new_tag_input)
-
-                update_card_tags(entry_id, final_tags)
-                st.toast("Tags updated!", icon="✅")
-                st.rerun(scope="app")
+    if st.button("🏷️ Edit Tags", key=f"btn_edit_tags_{entry_id}", use_container_width=True):
+        edit_tags_dialog(entry_id, current_tags)
 
     c_dec, c_inc = st.columns(2)
     with c_dec:
