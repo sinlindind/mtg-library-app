@@ -18,7 +18,7 @@ user = st.session_state.user
 user_library = get_user_library(user["id"])
 active_cards = [card for card in user_library if card.get("quantity", 0) > 0]
 
-# Collect all unique existing tags across active cards
+# FIX #2: Always calculate unique tags from ALL active cards in the full library, not filtered subsets
 all_existing_tags = sorted(list({tag for card in active_cards for tag in card.get("tags", []) if tag}))
 
 with st.sidebar:
@@ -36,6 +36,11 @@ with st.sidebar:
         key="library_tag_filter"
     )
 
+    if selected_tag_filter:
+        if st.button("Clear Tag Filter", use_container_width=True):
+            st.session_state["library_tag_filter"] = []
+            st.rerun()
+
     st.divider()
     if st.button("Logout", use_container_width=True):
         st.session_state.user = None
@@ -48,6 +53,63 @@ if selected_tag_filter:
         card for card in active_cards 
         if any(tag in card.get("tags", []) for tag in selected_tag_filter)
     ]
+
+# FIX #3: Fragment component to update isolated card variants without triggering full page reload or layout shift
+@st.fragment
+def render_variant_row(var, scryfall_id):
+    entry_id = var.get("id")
+    qty = var.get("quantity", 0)
+    finish = var.get("finish", "nonfoil").capitalize()
+    cond = var.get("condition", "Near Mint")
+    current_tags = var.get("tags", []) or []
+
+    st.markdown(f"**{qty}x** {finish} (`{cond}`)")
+    
+    if current_tags:
+        st.write(" ".join([f"`🏷️ {t}`" for t in current_tags]))
+
+    # FIX #1 & #3: Popover within fragment closes automatically after local rerun
+    with st.popover("🏷️ Edit Tags", use_container_width=True):
+        updated_tags = st.multiselect(
+            "Select existing tags",
+            options=sorted(list(set(all_existing_tags + current_tags))),
+            default=current_tags,
+            key=f"tag_select_{entry_id}"
+        )
+
+        new_tag_input = st.text_input(
+            "Or add a new custom tag:",
+            placeholder="e.g. Commander, Binder 1, Trade",
+            key=f"new_tag_input_{entry_id}"
+        ).strip()
+
+        if st.button("Save Tags", key=f"save_tags_{entry_id}", use_container_width=True):
+            final_tags = list(updated_tags)
+            if new_tag_input and new_tag_input not in final_tags:
+                final_tags.append(new_tag_input)
+
+            update_card_tags(entry_id, final_tags)
+            st.toast("Tags updated!", icon="✅")
+            st.rerun(scope="app")  # Triggers app-level update to refresh sidebar tag lists
+
+    c_dec, c_inc = st.columns(2)
+    with c_dec:
+        if st.button("➖ 1", key=f"lib_dec_{entry_id}", use_container_width=True):
+            new_qty = qty - 1
+            if new_qty <= 0:
+                remove_from_library(entry_id)
+                st.toast("Variant removed", icon="🗑️")
+                st.rerun(scope="app")
+            else:
+                update_library_card(entry_id, quantity=new_qty)
+                st.toast(f"Updated quantity to {new_qty}", icon="📉")
+                st.rerun(scope="app")
+
+    with c_inc:
+        if st.button("➕ 1", key=f"lib_inc_{entry_id}", use_container_width=True):
+            update_library_card(entry_id, quantity=qty + 1)
+            st.toast(f"Updated quantity to {qty + 1}", icon="📈")
+            st.rerun(scope="app")
 
 st.subheader(f"My Library ({len(filtered_cards)} items)")
 
@@ -83,63 +145,7 @@ else:
                 st.divider()
 
                 for var in variants:
-                    entry_id = var.get("id")
-                    qty = var.get("quantity", 0)
-                    finish = var.get("finish", "nonfoil").capitalize()
-                    cond = var.get("condition", "Near Mint")
-                    current_tags = var.get("tags", []) or []
-
-                    st.markdown(f"**{qty}x** {finish} (`{cond}`)")
-                    
-                    # Display existing tags or empty prompt
-                    if current_tags:
-                        st.write(" ".join([f"`🏷️ {t}`" for t in current_tags]))
-
-                    # Tag Editor Popover
-                    with st.popover("🏷️ Edit Tags", use_container_width=True):
-                        # Multiselect for choosing existing tags
-                        updated_tags = st.multiselect(
-                            "Select existing tags",
-                            options=sorted(list(set(all_existing_tags + current_tags))),
-                            default=current_tags,
-                            key=f"tag_select_{entry_id}"
-                        )
-
-                        # Input to create a brand-new tag
-                        new_tag_input = st.text_input(
-                            "Or add a new custom tag:",
-                            placeholder="e.g. Commander, Binder 1, Trade",
-                            key=f"new_tag_input_{entry_id}"
-                        ).strip()
-
-                        if st.button("Save Tags", key=f"save_tags_{entry_id}", use_container_width=True):
-                            final_tags = list(updated_tags)
-                            
-                            # Append the new typed tag if present and not a duplicate
-                            if new_tag_input and new_tag_input not in final_tags:
-                                final_tags.append(new_tag_input)
-
-                            update_card_tags(entry_id, final_tags)
-                            st.toast("Tags updated!", icon="✅")
-                            st.rerun()
-
-                    c_dec, c_inc = st.columns(2)
-                    with c_dec:
-                        if st.button("➖ 1", key=f"lib_dec_{entry_id}", use_container_width=True):
-                            new_qty = qty - 1
-                            if new_qty <= 0:
-                                remove_from_library(entry_id)
-                                st.toast("Variant removed", icon="🗑️")
-                            else:
-                                update_library_card(entry_id, quantity=new_qty)
-                                st.toast(f"Updated quantity to {new_qty}", icon="📉")
-                            st.rerun()
-
-                    with c_inc:
-                        if st.button("➕ 1", key=f"lib_inc_{entry_id}", use_container_width=True):
-                            update_library_card(entry_id, quantity=qty + 1)
-                            st.toast(f"Updated quantity to {qty + 1}", icon="📈")
-                            st.rerun()
+                    render_variant_row(var, scryfall_id)
 
                 card_finishes = card_data.get("finishes", ["nonfoil", "foil", "etched"]) if card_data else ["nonfoil", "foil", "etched"]
                 with st.popover("➕ Add Variant", use_container_width=True):
