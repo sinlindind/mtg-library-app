@@ -229,3 +229,6 @@ venv/
 
 # Directory for db schema files
 schema/
+
+.DS_Store
+**/.DS_Store
