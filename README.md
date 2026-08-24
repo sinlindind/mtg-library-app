@@ -10,4 +10,4 @@ This is a basic application to maintain a personal library of Magic The Gatherin
 4. Develop web-based UI with python backend.
 
 ## Current Version
-v0.0.0
+v0.0.0 (vMAJOR.MINOR.PATCH)
