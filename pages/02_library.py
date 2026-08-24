@@ -1,5 +1,5 @@
 import streamlit as st
-from services.database import get_user_library, update_library_card, remove_from_library, add_card_to_library
+from services.database import get_user_library, update_library_card, remove_from_library, add_card_to_library, update_card_tags
 from services.scryfall import get_card_by_id, get_card_image_url
 
 st.set_page_config(page_title="My Library", page_icon="📚", layout="wide", initial_sidebar_state="expanded")
@@ -18,6 +18,9 @@ user = st.session_state.user
 user_library = get_user_library(user["id"])
 active_cards = [card for card in user_library if card.get("quantity", 0) > 0]
 
+# Collect all unique existing tags across active cards
+all_existing_tags = sorted(list({tag for card in active_cards for tag in card.get("tags", []) if tag}))
+
 with st.sidebar:
     st.title(f"👤 {user['username']}")
     st.markdown("### Navigation")
@@ -26,17 +29,33 @@ with st.sidebar:
     st.page_link("pages/03_wishlist.py", label="My Wishlist", icon="❤️")
     st.divider()
 
+    st.markdown("### 🏷️ Filter by Tags")
+    selected_tag_filter = st.multiselect(
+        "Show cards with tags:",
+        options=all_existing_tags,
+        key="library_tag_filter"
+    )
+
+    st.divider()
     if st.button("Logout", use_container_width=True):
         st.session_state.user = None
         st.switch_page("app.py")
 
-st.subheader(f"My Library ({len(active_cards)} items)")
+# Apply sidebar tag filter
+filtered_cards = active_cards
+if selected_tag_filter:
+    filtered_cards = [
+        card for card in active_cards 
+        if any(tag in card.get("tags", []) for tag in selected_tag_filter)
+    ]
 
-if not active_cards:
-    st.info("Your library is currently empty. Use Search to add cards!")
+st.subheader(f"My Library ({len(filtered_cards)} items)")
+
+if not filtered_cards:
+    st.info("No cards found matching the criteria. Use Search to add cards or clear tag filters!")
 else:
     grouped_library = {}
-    for item in active_cards:
+    for item in filtered_cards:
         sid = item.get("scryfall_id")
         if sid not in grouped_library:
             grouped_library[sid] = []
@@ -68,10 +87,28 @@ else:
                     qty = var.get("quantity", 0)
                     finish = var.get("finish", "nonfoil").capitalize()
                     cond = var.get("condition", "Near Mint")
+                    current_tags = var.get("tags", []) or []
 
                     st.markdown(f"**{qty}x** {finish} (`{cond}`)")
-                    c_dec, c_inc, c_edit = st.columns([1, 1, 1.2])
                     
+                    # Display existing tags or empty prompt
+                    if current_tags:
+                        st.write(" ".join([f"`🏷️ {t}`" for t in current_tags]))
+
+                    # Tag Editor Popover
+                    with st.popover("🏷️ Edit Tags", use_container_width=True):
+                        updated_tags = st.multiselect(
+                            "Select or type tags",
+                            options=sorted(list(set(all_existing_tags + current_tags))),
+                            default=current_tags,
+                            key=f"tag_select_{entry_id}"
+                        )
+                        if st.button("Save Tags", key=f"save_tags_{entry_id}", use_container_width=True):
+                            update_card_tags(entry_id, updated_tags)
+                            st.toast("Tags updated!", icon="✅")
+                            st.rerun()
+
+                    c_dec, c_inc = st.columns(2)
                     with c_dec:
                         if st.button("➖ 1", key=f"lib_dec_{entry_id}", use_container_width=True):
                             new_qty = qty - 1
