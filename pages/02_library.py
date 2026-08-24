@@ -97,14 +97,29 @@ else:
 
                     # Tag Editor Popover
                     with st.popover("🏷️ Edit Tags", use_container_width=True):
+                        # Multiselect for choosing existing tags
                         updated_tags = st.multiselect(
-                            "Select or type tags",
+                            "Select existing tags",
                             options=sorted(list(set(all_existing_tags + current_tags))),
                             default=current_tags,
                             key=f"tag_select_{entry_id}"
                         )
+
+                        # Input to create a brand-new tag
+                        new_tag_input = st.text_input(
+                            "Or add a new custom tag:",
+                            placeholder="e.g. Commander, Binder 1, Trade",
+                            key=f"new_tag_input_{entry_id}"
+                        ).strip()
+
                         if st.button("Save Tags", key=f"save_tags_{entry_id}", use_container_width=True):
-                            update_card_tags(entry_id, updated_tags)
+                            final_tags = list(updated_tags)
+                            
+                            # Append the new typed tag if present and not a duplicate
+                            if new_tag_input and new_tag_input not in final_tags:
+                                final_tags.append(new_tag_input)
+
+                            update_card_tags(entry_id, final_tags)
                             st.toast("Tags updated!", icon="✅")
                             st.rerun()
 
