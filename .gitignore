@@ -226,3 +226,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Directory for db schema files
+schema/
