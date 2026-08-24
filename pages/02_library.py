@@ -84,27 +84,30 @@ def render_variant_row(var, scryfall_id):
         st.write(" ".join([f"`🏷️ {t}`" for t in current_tags]))
 
     with st.popover("🏷️ Edit Tags", use_container_width=True):
-        updated_tags = st.multiselect(
-            "Select existing tags",
-            options=sorted(list(set(all_existing_tags + current_tags))),
-            default=current_tags,
-            key=f"tag_select_{entry_id}"
-        )
+        with st.form(key=f"tag_form_{entry_id}", clear_on_submit=False):
+            updated_tags = st.multiselect(
+                "Select existing tags",
+                options=sorted(list(set(all_existing_tags + current_tags))),
+                default=current_tags,
+                key=f"tag_select_{entry_id}"
+            )
 
-        new_tag_input = st.text_input(
-            "Or add a new custom tag:",
-            placeholder="e.g. Commander, Binder 1, Trade",
-            key=f"new_tag_input_{entry_id}"
-        ).strip()
+            new_tag_input = st.text_input(
+                "Or add a new custom tag:",
+                placeholder="e.g. Commander, Binder 1, Trade",
+                key=f"new_tag_input_{entry_id}"
+            ).strip()
 
-        if st.button("Save Tags", key=f"save_tags_{entry_id}", use_container_width=True):
-            final_tags = list(updated_tags)
-            if new_tag_input and new_tag_input not in final_tags:
-                final_tags.append(new_tag_input)
+            submitted = st.form_submit_button("Save Tags", use_container_width=True)
 
-            update_card_tags(entry_id, final_tags)
-            st.toast("Tags updated!", icon="✅")
-            st.rerun(scope="app")
+            if submitted:
+                final_tags = list(updated_tags)
+                if new_tag_input and new_tag_input not in final_tags:
+                    final_tags.append(new_tag_input)
+
+                update_card_tags(entry_id, final_tags)
+                st.toast("Tags updated!", icon="✅")
+                st.rerun(scope="app")
 
     c_dec, c_inc = st.columns(2)
     with c_dec:
