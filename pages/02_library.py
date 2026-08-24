@@ -18,12 +18,13 @@ user = st.session_state.user
 user_library = get_user_library(user["id"])
 active_cards = [card for card in user_library if card.get("quantity", 0) > 0]
 
-# FIX #2: Always calculate unique tags from ALL active cards in the full library, not filtered subsets
+# Calculate unique tags from ALL active cards in the library
 all_existing_tags = sorted(list({tag for card in active_cards for tag in card.get("tags", []) if tag}))
 
-# Callback function to clear the tag filter before widget instantiation
-def clear_tag_filter():
-    st.session_state["library_tag_filter"] = []
+# Callback to uncheck all tag checkboxes before the script reruns
+def clear_all_tags():
+    for tag in all_existing_tags:
+        st.session_state[f"tag_{tag}"] = False
 
 with st.sidebar:
     st.title(f"👤 {user['username']}")
@@ -34,18 +35,26 @@ with st.sidebar:
     st.divider()
 
     st.markdown("### 🏷️ Filter by Tags")
-    selected_tag_filter = st.multiselect(
-        "Show cards with tags:",
-        options=all_existing_tags,
-        key="library_tag_filter"
-    )
+    selected_tag_filter = []
 
-    if selected_tag_filter:
-        st.button(
-            "Clear Tag Filter", 
-            use_container_width=True, 
-            on_click=clear_tag_filter
-        )
+    if all_existing_tags:
+        with st.expander("Select Tags", expanded=False):
+            for tag in all_existing_tags:
+                tag_key = f"tag_{tag}"
+                if tag_key not in st.session_state:
+                    st.session_state[tag_key] = False
+
+                if st.checkbox(tag, key=tag_key):
+                    selected_tag_filter.append(tag)
+
+        if selected_tag_filter:
+            st.button(
+                "Clear Tag Filter", 
+                use_container_width=True, 
+                on_click=clear_all_tags
+            )
+    else:
+        st.caption("No tags found in library")
 
     st.divider()
     if st.button("Logout", use_container_width=True):
@@ -60,7 +69,7 @@ if selected_tag_filter:
         if any(tag in card.get("tags", []) for tag in selected_tag_filter)
     ]
 
-# FIX #3: Fragment component to update isolated card variants without triggering full page reload or layout shift
+# Fragment component to update isolated card variants without full layout recalculations
 @st.fragment
 def render_variant_row(var, scryfall_id):
     entry_id = var.get("id")
@@ -74,7 +83,6 @@ def render_variant_row(var, scryfall_id):
     if current_tags:
         st.write(" ".join([f"`🏷️ {t}`" for t in current_tags]))
 
-    # FIX #1 & #3: Popover within fragment closes automatically after local rerun
     with st.popover("🏷️ Edit Tags", use_container_width=True):
         updated_tags = st.multiselect(
             "Select existing tags",
@@ -96,7 +104,7 @@ def render_variant_row(var, scryfall_id):
 
             update_card_tags(entry_id, final_tags)
             st.toast("Tags updated!", icon="✅")
-            st.rerun(scope="app")  # Triggers app-level update to refresh sidebar tag lists
+            st.rerun(scope="app")
 
     c_dec, c_inc = st.columns(2)
     with c_dec:
