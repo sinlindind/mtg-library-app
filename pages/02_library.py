@@ -95,7 +95,7 @@ def edit_tags_dialog(entry_id, current_tags):
 
             update_card_tags(entry_id, final_tags)
             st.toast("Tags updated!", icon="✅")
-            st.rerun()
+            st.rerun(scope="app")  # Reruns whole app so newly added tag displays immediately
 
 # Fragment component to update isolated card variants without full layout recalculations
 @st.fragment
