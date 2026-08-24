@@ -8,3 +8,6 @@ This is a basic application to maintain a personal library of Magic The Gatherin
 2. Connect to open-source datasource API
 3. Maintain current list of personal library
 4. Develop web-based UI with python backend.
+
+## Current Version
+v0.0.0 (vMAJOR.MINOR.PATCH)
