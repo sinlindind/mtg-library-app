@@ -3,7 +3,7 @@ import streamlit as st
 
 SCRYFALL_SEARCH_URL = "https://api.scryfall.com/cards/search"
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def search_cards(card_name: str) -> list:
     """Fetch card printings from Scryfall using strict phrase matching."""
     base_url = "https://api.scryfall.com/cards/search"

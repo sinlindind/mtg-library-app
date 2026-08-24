@@ -20,7 +20,12 @@ if "user" not in st.session_state or st.session_state.user is None:
     st.switch_page("app.py")
 
 user = st.session_state.user
-user_library = get_user_library(user["id"])
+
+# Keep library in session state to avoid stale reads on button callbacks
+if "user_library" not in st.session_state:
+    st.session_state.user_library = get_user_library(user["id"])
+
+user_library = st.session_state.user_library
 user_wishlist = get_user_wishlist(user["id"])
 
 # Helper function for autocomplete
@@ -80,6 +85,8 @@ with st.sidebar:
                 st.session_state.active_search_results = results
                 st.session_state.searchbox_key_counter += 1
                 st.session_state.should_scroll_top = True
+                # Refresh session library on new search
+                st.session_state.user_library = get_user_library(user["id"])
                 st.rerun()
 
     st.divider()
@@ -169,9 +176,17 @@ else:
         elif sort_option == "Name (A-Z)":
             sorted_results.sort(key=lambda x: x.get("name", "").lower())
 
-        # CALLBACK HANDLER FOR ADDING CARDS WITHOUT SCROLL JUMP
+        # CALLBACK HANDLER: Updates DB + updates session memory immediately
         def handle_add_card(card_id, finish, price, toast_msg):
             add_card_to_library(user["id"], card_id, finish, 1, "Near Mint", float(price) if price else None)
+            
+            # Instantly reflect quantity change in local state so Streamlit doesn't jump position
+            existing = next((item for item in st.session_state.user_library if item.get("scryfall_id") == card_id and item.get("finish") == finish), None)
+            if existing:
+                existing["quantity"] = existing.get("quantity", 0) + 1
+            else:
+                st.session_state.user_library.append({"scryfall_id": card_id, "finish": finish, "quantity": 1})
+                
             st.toast(toast_msg, icon="✅")
 
         cols = st.columns(3)
