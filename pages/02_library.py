@@ -21,6 +21,10 @@ active_cards = [card for card in user_library if card.get("quantity", 0) > 0]
 # FIX #2: Always calculate unique tags from ALL active cards in the full library, not filtered subsets
 all_existing_tags = sorted(list({tag for card in active_cards for tag in card.get("tags", []) if tag}))
 
+# Callback function to clear the tag filter before widget instantiation
+def clear_tag_filter():
+    st.session_state["library_tag_filter"] = []
+
 with st.sidebar:
     st.title(f"👤 {user['username']}")
     st.markdown("### Navigation")
@@ -37,9 +41,11 @@ with st.sidebar:
     )
 
     if selected_tag_filter:
-        if st.button("Clear Tag Filter", use_container_width=True):
-            st.session_state["library_tag_filter"] = []
-            st.rerun()
+        st.button(
+            "Clear Tag Filter", 
+            use_container_width=True, 
+            on_click=clear_tag_filter
+        )
 
     st.divider()
     if st.button("Logout", use_container_width=True):
