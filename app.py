@@ -80,6 +80,9 @@ st.markdown("""
 if "user" not in st.session_state:
     st.session_state.user = None
 
+if "scryfall_search" not in st.session_state:
+    st.session_state.scryfall_search = ""
+
 # Initialize In-Memory Card Cache
 if "card_cache" not in st.session_state:
     st.session_state.card_cache = {}
@@ -181,13 +184,30 @@ else:
         st.markdown("### 🃏 **MTG Hub**")
 
     with col_nav:
-        current_tab = st.segmented_control(
-            label="Navigation",
-            options=["🔍 Search", "📚 Library", "❤️ Wishlist"],
-            default=st.session_state.get("active_tab", "🔍 Search"),
-            key="active_tab",
-            label_visibility="collapsed"
-        )
+        nav_col, search_col = st.columns([2.5, 1], vertical_alignment="center")
+        
+        with nav_col:
+            current_tab = st.segmented_control(
+                label="Navigation",
+                options=["🔍 Search", "📚 Library", "❤️ Wishlist"],
+                default=st.session_state.get("active_tab", "🔍 Search"),
+                key="active_tab",
+                label_visibility="collapsed"
+            )
+            
+        with search_col:
+            # Persistent Popover Header Search
+            with st.popover("🔍 Scryfall Search", width="stretch"):
+                quick_query = st.text_input(
+                    "Search Scryfall Cards...", 
+                    value=st.session_state.get("scryfall_search", ""),
+                    placeholder="Type card name...", 
+                    key="popover_search_input"
+                )
+                if st.button("Search", width="stretch", key="submit_quick_search"):
+                    st.session_state["scryfall_search"] = quick_query
+                    st.session_state["active_tab"] = "🔍 Search"
+                    st.rerun()
 
     with col_user:
         u_col, lg_col = st.columns([2, 1], vertical_alignment="center")
@@ -342,17 +362,15 @@ else:
     if current_tab == "🔍 Search":
         st.subheader("Card Search")
         
-        search_query = st.text_input(
-            "Search Scryfall...", 
-            placeholder="Type card name e.g. Sol Ring, Black Lotus...", 
-            key="scryfall_search"
-        )
+        search_query = st.session_state.get("scryfall_search", "")
         
         if search_query:
             results = search_cards(search_query)
-            st.caption(f"Found **{len(results)}** printings")
+            st.caption(f"Found **{len(results)}** printings for `{search_query}`")
             for idx, card in enumerate(results):
                 render_search_row(card, idx)
+        else:
+            st.info("Use the 🔍 Scryfall Search popover in the top bar to search for cards.")
 
     elif current_tab == "📚 Library":
         st.subheader("My Collection")
