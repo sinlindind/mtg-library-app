@@ -194,7 +194,7 @@ else:
     # --- FRAGMENT: LIBRARY ROW ---
     @st.fragment
     def render_library_row(item, card_data):
-        c_preview, c_info, c_finish, c_qty = st.columns([0.5, 3.0, 1.5, 2.2])
+        c_preview, c_info, c_finish, c_qty = st.columns([1.8, 3.0, 1.5, 2.2])
         entry_id = item.get("id")
         
         card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
@@ -240,7 +240,7 @@ else:
     # --- FRAGMENT: WISHLIST ROW ---
     @st.fragment
     def render_wishlist_row(scryfall_id, card_data, idx):
-        c_preview, c_info, c_price, c_actions = st.columns([0.5, 3.0, 1.5, 2.2])
+        c_preview, c_info, c_price, c_actions = st.columns([1.8, 3.0, 1.5, 2.2])
 
         card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
         set_name = card_data.get("set_name", "Unknown Set") if card_data else "Unknown Set"
@@ -287,7 +287,6 @@ else:
         lib_query = st.text_input("Filter Library...", placeholder="Search library by card name or set...", key="library_search").strip().lower()
         library_cards = [c for c in st.session_state.user_library if c.get("quantity", 0) > 0]
         
-        # Pre-fetch card metadata for filtering
         filtered_library = []
         for item in library_cards:
             scryfall_id = item.get("scryfall_id")
@@ -310,7 +309,6 @@ else:
         wish_query = st.text_input("Filter Wishlist...", placeholder="Search wishlist by card name or set...", key="wishlist_search").strip().lower()
         wishlist_ids = st.session_state.user_wishlist
         
-        # Pre-fetch card metadata for filtering
         filtered_wishlist = []
         for scryfall_id in wishlist_ids:
             card_data = get_card_by_id(scryfall_id) if scryfall_id else None
