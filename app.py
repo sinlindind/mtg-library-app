@@ -73,6 +73,16 @@ st.markdown("""
             border-bottom: 1px solid #2e303e;
             padding: 0.8rem 0;
         }
+            
+        /* 8. Make search/filter text inputs sticky at the top while scrolling */
+        div[data-testid="stTextInput"] {
+            position: sticky !important;
+            top: 0.5rem !important;
+            z-index: 999 !important;
+            background-color: var(--background-color, #0e1117) !important;
+            padding-bottom: 0.5rem !important;
+            padding-top: 0.25rem !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -345,7 +355,14 @@ else:
     # --- TAB ROUTING ---
     if current_tab == "🔍 Search":
         st.subheader("Card Search")
-        search_query = st.text_input("Search Scryfall...", placeholder="Type card name e.g. Sol Ring, Black Lotus...", key="scryfall_search")
+        
+        # Sticky Search Input Container
+        search_query = st.text_input(
+            "Search Scryfall...", 
+            placeholder="Type card name e.g. Sol Ring, Black Lotus...", 
+            key="scryfall_search"
+        )
+        
         if search_query:
             results = search_cards(search_query)
             st.caption(f"Found **{len(results)}** printings")
@@ -354,13 +371,19 @@ else:
 
     elif current_tab == "📚 Library":
         st.subheader("My Collection")
-        lib_query = st.text_input("Filter Library...", placeholder="Search library by card name or set...", key="library_search").strip().lower()
+        
+        # Sticky Filter Input Container
+        lib_query = st.text_input(
+            "Filter Library...", 
+            placeholder="Search library by card name or set...", 
+            key="library_search"
+        ).strip().lower()
+        
         library_cards = [c for c in st.session_state.user_library if c.get("quantity", 0) > 0]
         
         filtered_library = []
         for item in library_cards:
             scryfall_id = item.get("scryfall_id")
-            # Try DB text fields first, fall back to in-memory cache
             c_name = (item.get("card_name") or "").lower()
             s_name = (item.get("set_name") or "").lower()
             
@@ -382,7 +405,14 @@ else:
 
     elif current_tab == "❤️ Wishlist":
         st.subheader("My Wishlist")
-        wish_query = st.text_input("Filter Wishlist...", placeholder="Search wishlist by card name or set...", key="wishlist_search").strip().lower()
+        
+        # Sticky Filter Input Container
+        wish_query = st.text_input(
+            "Filter Wishlist...", 
+            placeholder="Search wishlist by card name or set...", 
+            key="wishlist_search"
+        ).strip().lower()
+        
         wishlist_items = st.session_state.user_wishlist
         
         filtered_wishlist = []
