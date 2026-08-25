@@ -18,7 +18,7 @@ from utils.auth import verify_password
 
 st.set_page_config(page_title="MTG Hub", page_icon="🃏", layout="wide", initial_sidebar_state="collapsed")
 
-# Custom CSS for compact layout, sticky actions, and zero clipping
+# Custom CSS for sticky header bar, zero clipping, and compact layout
 st.markdown("""
     <style>
         /* 1. Hide Streamlit's native top header bar */
@@ -34,25 +34,22 @@ st.markdown("""
 
         /* 3. Adjust top padding for main page container */
         .block-container {
-            padding-top: 2rem !important;
+            padding-top: 0.5rem !important;
             padding-bottom: 2rem !important;
         }
 
-        /* 4. Prevent column containers from clipping top/bottom overflow */
-        div[data-testid="column"] {
-            overflow: visible !important;
-        }
-
-        /* 5. Sticky styling for text and action columns so icons stay visible during scrolling */
-        div[data-testid="column"]:nth-of-type(2),
-        div[data-testid="column"]:nth-of-type(3),
-        div[data-testid="column"]:nth-of-type(4) {
+        /* 4. Sticky Header Container */
+        div[data-testid="stVerticalBlock"] > div:has(div.sticky-header-marker) {
             position: sticky !important;
-            top: 1rem !important;
-            align-self: flex-start !important;
+            top: 0 !important;
+            z-index: 99999 !important;
+            background-color: #0e1117 !important;
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+            border-bottom: 1px solid #2e303e !important;
         }
 
-        /* 6. Standardize button heights and vertical alignment */
+        /* 5. Standardize button heights and vertical alignment */
         div.stButton > button {
             height: 2.25rem !important;
             padding: 0 0.5rem !important;
@@ -61,17 +58,9 @@ st.markdown("""
             margin-bottom: 0 !important;
         }
 
-        /* 7. Standardize segmented control height */
+        /* 6. Standardize segmented control height */
         div[data-testid="stSegmentedControl"] {
             min-height: 2.25rem !important;
-        }
-
-        /* Compact row divider */
-        .card-row {
-            display: flex;
-            align-items: flex-start;
-            border-bottom: 1px solid #2e303e;
-            padding: 0.8rem 0;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -93,11 +82,6 @@ def fetch_cached_card(scryfall_id):
         if card:
             st.session_state.card_cache[scryfall_id] = card
     return st.session_state.card_cache.get(scryfall_id)
-
-# Callback to handle popover search submission safely before widgets render
-def trigger_popover_search():
-    st.session_state["scryfall_search"] = st.session_state.get("popover_search_input", "")
-    st.session_state["active_tab"] = "🔍 Search"
 
 # --- UNAUTHENTICATED VIEW (LOGIN) ---
 if st.session_state.user is None:
@@ -136,7 +120,6 @@ if st.session_state.user is None:
 else:
     user = st.session_state.user
 
-    # Initial load and background backfill function
     def load_and_backfill_user_data(user_id):
         library = get_user_library(user_id)
         wishlist = get_user_wishlist(user_id)
@@ -177,28 +160,15 @@ else:
 
     wishlist_ids = [w["scryfall_id"] for w in st.session_state.user_wishlist]
 
-    # --- TOP NAVIGATION BAR ---
-    col_brand, col_nav, col_user = st.columns([1.5, 3.5, 1.5], vertical_alignment="center")
+    # --- STICKY TOP HEADER CONTAINER ---
+    with st.container():
+        st.markdown('<div class="sticky-header-marker"></div>', unsafe_allow_html=True)
+        col_brand, col_nav, col_user = st.columns([1.2, 3.8, 1.2], vertical_alignment="center")
 
-    with col_brand:
-        st.markdown("### 🃏 **MTG Hub**")
+        with col_brand:
+            st.markdown("### 🃏 **MTG Hub**")
 
-    with col_nav:
-        nav_col, search_col = st.columns([2.5, 1], vertical_alignment="center")
-        
-        with search_col:
-            # Persistent Popover Header Search
-            with st.popover("🔍 Scryfall Search", width="stretch"):
-                st.text_input(
-                    "Search Scryfall Cards...", 
-                    value=st.session_state.get("scryfall_search", ""),
-                    placeholder="Type card name...", 
-                    key="popover_search_input",
-                    on_change=trigger_popover_search
-                )
-                st.button("Search", width="stretch", key="submit_quick_search", on_click=trigger_popover_search)
-
-        with nav_col:
+        with col_nav:
             current_tab = st.segmented_control(
                 label="Navigation",
                 options=["🔍 Search", "📚 Library", "❤️ Wishlist"],
@@ -207,14 +177,39 @@ else:
                 label_visibility="collapsed"
             )
 
-    with col_user:
-        u_col, lg_col = st.columns([2, 1], vertical_alignment="center")
-        u_col.caption(f"👤 **{user['username']}**")
-        if lg_col.button("Logout", key="top_logout_btn"):
-            st.session_state.clear()
-            st.rerun()
+        with col_user:
+            u_col, lg_col = st.columns([1.5, 1], vertical_alignment="center")
+            u_col.caption(f"👤 **{user['username']}**")
+            if lg_col.button("Logout", key="top_logout_btn"):
+                st.session_state.clear()
+                st.rerun()
 
-    st.divider()
+        # Dedicated Tab-Specific Search Bar inside Sticky Header
+        if current_tab == "🔍 Search":
+            search_query = st.text_input(
+                "Scryfall Search",
+                value=st.session_state.get("scryfall_search", ""),
+                placeholder="Search Scryfall... e.g. Sol Ring, Black Lotus",
+                key="scryfall_search_input",
+                label_visibility="collapsed"
+            )
+            st.session_state["scryfall_search"] = search_query
+
+        elif current_tab == "📚 Library":
+            lib_query = st.text_input(
+                "Filter Library",
+                placeholder="Filter Library by card name or set...",
+                key="library_search_input",
+                label_visibility="collapsed"
+            ).strip().lower()
+
+        elif current_tab == "❤️ Wishlist":
+            wish_query = st.text_input(
+                "Filter Wishlist",
+                placeholder="Filter Wishlist by card name or set...",
+                key="wishlist_search_input",
+                label_visibility="collapsed"
+            ).strip().lower()
 
     # --- FRAGMENT: SEARCH ROW ---
     @st.fragment
@@ -356,29 +351,17 @@ else:
 
         st.divider()
 
-    # --- TAB ROUTING ---
+    # --- SCROLLABLE CONTENT AREA ---
     if current_tab == "🔍 Search":
-        st.subheader("Card Search")
-        
-        search_query = st.session_state.get("scryfall_search", "")
-        
         if search_query:
             results = search_cards(search_query)
             st.caption(f"Found **{len(results)}** printings for `{search_query}`")
             for idx, card in enumerate(results):
                 render_search_row(card, idx)
         else:
-            st.info("Use the 🔍 Scryfall Search popover in the top bar to search for cards.")
+            st.info("Type a card name in the search bar above to query Scryfall.")
 
     elif current_tab == "📚 Library":
-        st.subheader("My Collection")
-        
-        lib_query = st.text_input(
-            "Filter Library...", 
-            placeholder="Search library by card name or set...", 
-            key="library_search"
-        ).strip().lower()
-        
         library_cards = [c for c in st.session_state.user_library if c.get("quantity", 0) > 0]
         
         filtered_library = []
@@ -404,14 +387,6 @@ else:
                 render_library_row(item, card_data)
 
     elif current_tab == "❤️ Wishlist":
-        st.subheader("My Wishlist")
-        
-        wish_query = st.text_input(
-            "Filter Wishlist...", 
-            placeholder="Search wishlist by card name or set...", 
-            key="wishlist_search"
-        ).strip().lower()
-        
         wishlist_items = st.session_state.user_wishlist
         
         filtered_wishlist = []
