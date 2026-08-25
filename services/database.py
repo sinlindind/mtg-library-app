@@ -164,3 +164,11 @@ def get_user_wishlist(user_id: str) -> list[str]:
     if response.data:
         return [row["scryfall_id"] for row in response.data]
     return []
+
+# ==========================================
+# Card Tagging Functions
+# ==========================================
+
+def update_card_tags(entry_id: int, tags: list[str]):
+    # Pure Supabase query — no Scryfall calls or headers involved
+    return supabase.table("user_cards").update({"tags": tags}).eq("id", entry_id).execute()
