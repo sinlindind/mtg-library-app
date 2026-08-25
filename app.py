@@ -110,7 +110,7 @@ if st.session_state.user is None:
             "  const inputs = window.parent.document.querySelectorAll('input[type=\"text\"]');"
             "  if (inputs.length > 0) { inputs[0].focus(); }"
             "</script>",
-            height=0
+            height=1
         )
 
         if login_submitted:
