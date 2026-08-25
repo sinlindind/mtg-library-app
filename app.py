@@ -32,13 +32,18 @@ st.markdown("""
             display: none !important; 
         }
 
-        /* 3. Eliminate top padding so sticky header touches top screen edge */
-        .block-container {
+        /* 3. Flush Viewport Padding Reset */
+        .stApp, section.main, .block-container {
             padding-top: 0rem !important;
-            padding-bottom: 2rem !important;
+            margin-top: 0rem !important;
         }
 
-        /* 4. Sticky Header Container - Flush to top */
+        /* Remove auto-gap on the first element in the main layout */
+        div[data-testid="stMainBlockContainer"] {
+            padding-top: 0rem !important;
+        }
+
+        /* 4. Sticky Header Container - Locked Flush at y=0 */
         div[data-testid="stVerticalBlock"] > div:has(div.sticky-header-marker) {
             position: sticky !important;
             top: 0 !important;
@@ -46,6 +51,7 @@ st.markdown("""
             background-color: #0e1117 !important;
             padding-top: 0.75rem !important;
             padding-bottom: 0.75rem !important;
+            margin-top: 0rem !important;
             border-bottom: 1px solid #2e303e !important;
         }
 
