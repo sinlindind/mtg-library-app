@@ -14,11 +14,42 @@ from utils.auth import verify_password
 
 st.set_page_config(page_title="MTG Hub", page_icon="🃏", layout="wide", initial_sidebar_state="collapsed")
 
-# Hide standard sidebar completely
+# Add some style to the app
 st.markdown("""
     <style>
-        [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; }
-        .block-container { padding-top: 1.5rem; padding-bottom: 1rem; }
+        /* 1. Hide Streamlit's native top header bar */
+        header[data-testid="stHeader"] {
+            display: none !important;
+        }
+
+        /* 2. Hide standard sidebar and toggle control completely */
+        [data-testid="stSidebar"], 
+        [data-testid="collapsedControl"] { 
+            display: none !important; 
+        }
+
+        /* 3. Adjust top padding for main page container */
+        .block-container {
+            padding-top: 2rem !important;
+            padding-bottom: 2rem !important;
+        }
+
+        /* 4. Prevent column containers from clipping top/bottom overflow */
+        div[data-testid="column"] {
+            overflow: visible !important;
+        }
+
+        /* 5. Standardize button heights and vertical alignment */
+        div.stButton > button {
+            height: 2.25rem !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+        }
+
+        /* 6. Standardize segmented control height */
+        div[data-testid="stSegmentedControl"] {
+            min-height: 2.25rem !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
