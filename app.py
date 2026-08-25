@@ -357,62 +357,63 @@ else:
 
         st.divider()
 
-    # --- SCROLLABLE CONTENT AREA ---
-    if current_tab == "🔍 Search":
-        if search_query:
-            results = search_cards(search_query)
-            st.caption(f"Found **{len(results)}** printings for `{search_query}`")
-            for idx, card in enumerate(results):
-                render_search_row(card, idx)
-        else:
-            st.info("Type a card name in the search bar above to query Scryfall.")
+    # --- ISOLATED SCROLLABLE CONTENT AREA ---
+    with st.container(height=750, border=False):
+        if current_tab == "🔍 Search":
+            if search_query:
+                results = search_cards(search_query)
+                st.caption(f"Found **{len(results)}** printings for `{search_query}`")
+                for idx, card in enumerate(results):
+                    render_search_row(card, idx)
+            else:
+                st.info("Type a card name in the search bar above to query Scryfall.")
 
-    elif current_tab == "📚 Library":
-        library_cards = [c for c in st.session_state.user_library if c.get("quantity", 0) > 0]
-        
-        filtered_library = []
-        for item in library_cards:
-            scryfall_id = item.get("scryfall_id")
-            c_name = (item.get("card_name") or "").lower()
-            s_name = (item.get("set_name") or "").lower()
+        elif current_tab == "📚 Library":
+            library_cards = [c for c in st.session_state.user_library if c.get("quantity", 0) > 0]
             
-            card_data = None
-            if not c_name or not s_name:
-                card_data = fetch_cached_card(scryfall_id)
-                c_name = (card_data.get("name") if card_data else "").lower()
-                s_name = (card_data.get("set_name") if card_data else "").lower()
+            filtered_library = []
+            for item in library_cards:
+                scryfall_id = item.get("scryfall_id")
+                c_name = (item.get("card_name") or "").lower()
+                s_name = (item.get("set_name") or "").lower()
+                
+                card_data = None
+                if not c_name or not s_name:
+                    card_data = fetch_cached_card(scryfall_id)
+                    c_name = (card_data.get("name") if card_data else "").lower()
+                    s_name = (card_data.get("set_name") if card_data else "").lower()
 
-            if not lib_query or lib_query in c_name or lib_query in s_name:
-                filtered_library.append((item, card_data))
+                if not lib_query or lib_query in c_name or lib_query in s_name:
+                    filtered_library.append((item, card_data))
 
-        st.caption(f"Showing **{len(filtered_library)}** of **{len(library_cards)}** entries")
-        if not filtered_library:
-            st.info("No matching cards in your library.")
-        else:
-            for item, card_data in filtered_library:
-                render_library_row(item, card_data)
+            st.caption(f"Showing **{len(filtered_library)}** of **{len(library_cards)}** entries")
+            if not filtered_library:
+                st.info("No matching cards in your library.")
+            else:
+                for item, card_data in filtered_library:
+                    render_library_row(item, card_data)
 
-    elif current_tab == "❤️ Wishlist":
-        wishlist_items = st.session_state.user_wishlist
-        
-        filtered_wishlist = []
-        for wish_item in wishlist_items:
-            scryfall_id = wish_item.get("scryfall_id")
-            c_name = (wish_item.get("card_name") or "").lower()
-            s_name = (wish_item.get("set_name") or "").lower()
+        elif current_tab == "❤️ Wishlist":
+            wishlist_items = st.session_state.user_wishlist
             
-            card_data = None
-            if not c_name or not s_name:
-                card_data = fetch_cached_card(scryfall_id)
-                c_name = (card_data.get("name") if card_data else "").lower()
-                s_name = (card_data.get("set_name") if card_data else "").lower()
+            filtered_wishlist = []
+            for wish_item in wishlist_items:
+                scryfall_id = wish_item.get("scryfall_id")
+                c_name = (wish_item.get("card_name") or "").lower()
+                s_name = (wish_item.get("set_name") or "").lower()
+                
+                card_data = None
+                if not c_name or not s_name:
+                    card_data = fetch_cached_card(scryfall_id)
+                    c_name = (card_data.get("name") if card_data else "").lower()
+                    s_name = (card_data.get("set_name") if card_data else "").lower()
 
-            if not wish_query or wish_query in c_name or wish_query in s_name:
-                filtered_wishlist.append((wish_item, card_data))
+                if not wish_query or wish_query in c_name or wish_query in s_name:
+                    filtered_wishlist.append((wish_item, card_data))
 
-        st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_items)}** items")
-        if not filtered_wishlist:
-            st.info("No matching items in your wishlist.")
-        else:
-            for idx, (wish_item, card_data) in enumerate(filtered_wishlist):
-                render_wishlist_row(wish_item, card_data, idx)
+            st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_items)}** items")
+            if not filtered_wishlist:
+                st.info("No matching items in your wishlist.")
+            else:
+                for idx, (wish_item, card_data) in enumerate(filtered_wishlist):
+                    render_wishlist_row(wish_item, card_data, idx)
