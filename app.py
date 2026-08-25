@@ -9,7 +9,9 @@ from services.database import (
     remove_from_library,
     update_library_card,
     add_to_wishlist,
-    remove_from_wishlist
+    remove_from_wishlist,
+    update_user_card_metadata,
+    update_wishlist_metadata
 )
 from services.scryfall import search_cards, get_card_by_id, get_card_image_url
 from utils.auth import verify_password
@@ -102,15 +104,15 @@ if st.session_state.user is None:
             login_password = st.text_input("Password", type="password", key="login_pass")
             login_submitted = st.form_submit_button("Login", use_container_width=True)
 
-        # Autofocus script: sets cursor directly into the username field on load
-        st.components.v1.html("""
+        # Replace st.components.v1.html with st.html or st.iframe
+        st.html("""
             <script>
                 const inputs = window.parent.document.querySelectorAll('input[type="text"]');
                 if (inputs.length > 0) {
                     inputs[0].focus();
                 }
             </script>
-        """, height=0)
+        """)
 
         if login_submitted:
             user_record = get_user_by_username(login_username)
