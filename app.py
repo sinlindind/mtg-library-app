@@ -200,6 +200,7 @@ else:
                 label_visibility="collapsed"
             )
             st.session_state["scryfall_search"] = search_query
+            active_query = search_query
 
         elif current_tab == "📚 Library":
             lib_query = st.text_input(
@@ -208,6 +209,7 @@ else:
                 key="library_search_input",
                 label_visibility="collapsed"
             ).strip().lower()
+            active_query = lib_query
 
         elif current_tab == "❤️ Wishlist":
             wish_query = st.text_input(
@@ -216,6 +218,7 @@ else:
                 key="wishlist_search_input",
                 label_visibility="collapsed"
             ).strip().lower()
+            active_query = wish_query
 
     # --- FRAGMENT: SEARCH ROW ---
     @st.fragment
@@ -357,8 +360,11 @@ else:
 
         st.divider()
 
-    # --- ISOLATED SCROLLABLE CONTENT AREA ---
-    with st.container(height=750, border=False):
+    # --- DYNAMICALLY KEYED SCROLLABLE CONTAINER ---
+    # Changing key forces Streamlit to rebuild the container element, resetting scroll offset to top
+    container_key = f"content_{current_tab}_{active_query}"
+
+    with st.container(height=750, border=False, key=container_key):
         if current_tab == "🔍 Search":
             if search_query:
                 results = search_cards(search_query)
