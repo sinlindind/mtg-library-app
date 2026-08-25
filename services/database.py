@@ -132,6 +132,14 @@ def remove_from_library(entry_id: str):
     
     return response.data
 
+def update_user_card_metadata(entry_id: int, card_name: str, set_name: str, image_url: str):
+    """Backfills missing metadata for a specific user_cards record."""
+    return supabase.table("user_cards").update({
+        "card_name": card_name,
+        "set_name": set_name,
+        "image_url": image_url
+    }).eq("id", entry_id).execute()
+
 
 # ==========================================
 # Wishlist Functions
@@ -176,6 +184,14 @@ def get_user_wishlist(user_id: str) -> list[dict]:
         .execute()
     
     return response.data if response.data else []
+
+def update_wishlist_metadata(wishlist_id: str, card_name: str, set_name: str, image_url: str):
+    """Backfills missing metadata for a specific wishlist record."""
+    return supabase.table("wishlists").update({
+        "card_name": card_name,
+        "set_name": set_name,
+        "image_url": image_url
+    }).eq("id", wishlist_id).execute()
 
 # ==========================================
 # Card Tagging Functions
