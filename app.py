@@ -200,15 +200,31 @@ else:
 
         # Dedicated Tab-Specific Search Bar inside Sticky Header
         if current_tab == "🔍 Search":
-            search_query = st.text_input(
-                "Scryfall Search",
-                value=st.session_state.get("scryfall_search", ""),
-                placeholder="Search Scryfall... e.g. Sol Ring, Black Lotus",
-                key="scryfall_search_input",
-                label_visibility="collapsed"
-            )
+            search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
+            with search_col:
+                search_query = st.text_input(
+                    "Scryfall Search",
+                    value=st.session_state.get("scryfall_search", ""),
+                    placeholder="Search Scryfall... e.g. Sol Ring, Black Lotus",
+                    key="scryfall_search_input",
+                    label_visibility="collapsed"
+                )
+            with sort_col:
+                sort_option = st.selectbox(
+                    "Sort Results",
+                    options=[
+                        "Name (A-Z)",
+                        "Name (Z-A)",
+                        "Price: Low to High",
+                        "Price: High to Low",
+                        "Released: Newest",
+                        "Released: Oldest"
+                    ],
+                    key="search_sort_option",
+                    label_visibility="collapsed"
+                )
             st.session_state["scryfall_search"] = search_query
-            active_query = search_query
+            active_query = f"{search_query}_{sort_option}"
 
         elif current_tab == "📚 Library":
             lib_query = st.text_input(
@@ -381,7 +397,30 @@ else:
         if current_tab == "🔍 Search":
             if search_query:
                 results = search_cards(search_query)
-                st.caption(f"Found **{len(results)}** printings for `{search_query}`")
+
+                # Sorting Helper for Prices
+                def get_usd_price(card):
+                    val = card.get("prices", {}).get("usd")
+                    try:
+                        return float(val) if val else 0.0
+                    except (ValueError, TypeError):
+                        return 0.0
+
+                # In-Memory Sorting Execution
+                if sort_option == "Name (A-Z)":
+                    results = sorted(results, key=lambda c: c.get("name", "").lower())
+                elif sort_option == "Name (Z-A)":
+                    results = sorted(results, key=lambda c: c.get("name", "").lower(), reverse=True)
+                elif sort_option == "Price: Low to High":
+                    results = sorted(results, key=get_usd_price)
+                elif sort_option == "Price: High to Low":
+                    results = sorted(results, key=get_usd_price, reverse=True)
+                elif sort_option == "Released: Newest":
+                    results = sorted(results, key=lambda c: c.get("released_at", ""), reverse=True)
+                elif sort_option == "Released: Oldest":
+                    results = sorted(results, key=lambda c: c.get("released_at", ""))
+
+                st.caption(f"Found **{len(results)}** printings for `{search_query}` (Sorted by: {sort_option})")
                 for idx, card in enumerate(results):
                     render_search_row(card, idx)
             else:
