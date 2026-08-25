@@ -101,7 +101,6 @@ if st.session_state.user is None:
         """, height=0)
 
         if login_submitted:
-            # Login processing logic...
             user_record = get_user_by_username(login_username)
             if user_record:
                 stored_hash, stored_salt = user_record["password_hash"].split(":")
@@ -194,11 +193,9 @@ else:
 
     # --- FRAGMENT: LIBRARY ROW ---
     @st.fragment
-    def render_library_row(item):
-        c_preview, c_info, c_finish, c_qty = st.columns([.5, 3.0, 1.5, 2.2])
+    def render_library_row(item, card_data):
+        c_preview, c_info, c_finish, c_qty = st.columns([0.5, 3.0, 1.5, 2.2])
         entry_id = item.get("id")
-        scryfall_id = item.get("scryfall_id")
-        card_data = get_card_by_id(scryfall_id) if scryfall_id else None
         
         card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
         set_name = card_data.get("set_name", "Unknown Set") if card_data else "Unknown Set"
@@ -242,9 +239,8 @@ else:
 
     # --- FRAGMENT: WISHLIST ROW ---
     @st.fragment
-    def render_wishlist_row(scryfall_id, idx):
-        c_preview, c_info, c_price, c_actions = st.columns([.5, 3.0, 1.5, 2.2])
-        card_data = get_card_by_id(scryfall_id) if scryfall_id else None
+    def render_wishlist_row(scryfall_id, card_data, idx):
+        c_preview, c_info, c_price, c_actions = st.columns([0.5, 3.0, 1.5, 2.2])
 
         card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
         set_name = card_data.get("set_name", "Unknown Set") if card_data else "Unknown Set"
@@ -279,7 +275,7 @@ else:
     # --- TAB ROUTING ---
     if current_tab == "🔍 Search":
         st.subheader("Card Search")
-        search_query = st.text_input("Search Scryfall...", placeholder="Type card name e.g. Sol Ring, Black Lotus...")
+        search_query = st.text_input("Search Scryfall...", placeholder="Type card name e.g. Sol Ring, Black Lotus...", key="scryfall_search")
         if search_query:
             results = search_cards(search_query)
             st.caption(f"Found **{len(results)}** printings")
@@ -288,20 +284,45 @@ else:
 
     elif current_tab == "📚 Library":
         st.subheader("My Collection")
+        lib_query = st.text_input("Filter Library...", placeholder="Search library by card name or set...", key="library_search").strip().lower()
         library_cards = [c for c in st.session_state.user_library if c.get("quantity", 0) > 0]
-        st.caption(f"Total entries: **{len(library_cards)}**")
-        if not library_cards:
-            st.info("Your library is empty. Use Search to add cards!")
+        
+        # Pre-fetch card metadata for filtering
+        filtered_library = []
+        for item in library_cards:
+            scryfall_id = item.get("scryfall_id")
+            card_data = get_card_by_id(scryfall_id) if scryfall_id else None
+            card_name = card_data.get("name", "").lower() if card_data else ""
+            set_name = card_data.get("set_name", "").lower() if card_data else ""
+            
+            if not lib_query or lib_query in card_name or lib_query in set_name:
+                filtered_library.append((item, card_data))
+
+        st.caption(f"Showing **{len(filtered_library)}** of **{len(library_cards)}** entries")
+        if not filtered_library:
+            st.info("No matching cards in your library.")
         else:
-            for item in library_cards:
-                render_library_row(item)
+            for item, card_data in filtered_library:
+                render_library_row(item, card_data)
 
     elif current_tab == "❤️ Wishlist":
         st.subheader("My Wishlist")
+        wish_query = st.text_input("Filter Wishlist...", placeholder="Search wishlist by card name or set...", key="wishlist_search").strip().lower()
         wishlist_ids = st.session_state.user_wishlist
-        st.caption(f"Total items: **{len(wishlist_ids)}**")
-        if not wishlist_ids:
-            st.info("Your wishlist is empty. Use Search to add cards!")
+        
+        # Pre-fetch card metadata for filtering
+        filtered_wishlist = []
+        for scryfall_id in wishlist_ids:
+            card_data = get_card_by_id(scryfall_id) if scryfall_id else None
+            card_name = card_data.get("name", "").lower() if card_data else ""
+            set_name = card_data.get("set_name", "").lower() if card_data else ""
+            
+            if not wish_query or wish_query in card_name or wish_query in set_name:
+                filtered_wishlist.append((scryfall_id, card_data))
+
+        st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_ids)}** items")
+        if not filtered_wishlist:
+            st.info("No matching items in your wishlist.")
         else:
-            for idx, scryfall_id in enumerate(wishlist_ids):
-                render_wishlist_row(scryfall_id, idx)
+            for idx, (scryfall_id, card_data) in enumerate(filtered_wishlist):
+                render_wishlist_row(scryfall_id, card_data, idx)
