@@ -32,20 +32,20 @@ st.markdown("""
             display: none !important; 
         }
 
-        /* 3. Adjust top padding for main page container */
+        /* 3. Eliminate top padding so sticky header touches top screen edge */
         .block-container {
-            padding-top: 0.5rem !important;
+            padding-top: 0rem !important;
             padding-bottom: 2rem !important;
         }
 
-        /* 4. Sticky Header Container */
+        /* 4. Sticky Header Container - Flush to top */
         div[data-testid="stVerticalBlock"] > div:has(div.sticky-header-marker) {
             position: sticky !important;
             top: 0 !important;
             z-index: 99999 !important;
             background-color: #0e1117 !important;
-            padding-top: 0.5rem !important;
-            padding-bottom: 0.5rem !important;
+            padding-top: 0.75rem !important;
+            padding-bottom: 0.75rem !important;
             border-bottom: 1px solid #2e303e !important;
         }
 
