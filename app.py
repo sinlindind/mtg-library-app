@@ -78,6 +78,18 @@ st.markdown("""
 if "user" not in st.session_state:
     st.session_state.user = None
 
+# Initialize In-Memory Card Cache
+if "card_cache" not in st.session_state:
+    st.session_state.card_cache = {}
+
+def fetch_cached_card(scryfall_id):
+    """Retrieve card payload from session memory or query network once."""
+    if scryfall_id not in st.session_state.card_cache:
+        card = get_card_by_id(scryfall_id)
+        if card:
+            st.session_state.card_cache[scryfall_id] = card
+    return st.session_state.card_cache.get(scryfall_id)
+
 # --- UNAUTHENTICATED VIEW (LOGIN) ---
 if st.session_state.user is None:
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -122,6 +134,9 @@ else:
     if "user_wishlist" not in st.session_state:
         st.session_state.user_wishlist = get_user_wishlist(user["id"])
 
+    # List of wishlist IDs for fast UI checking
+    wishlist_ids = [w["scryfall_id"] for w in st.session_state.user_wishlist]
+
     # --- TOP NAVIGATION BAR ---
     col_brand, col_nav, col_user = st.columns([1.5, 3, 1.5], vertical_alignment="center")
 
@@ -153,13 +168,18 @@ else:
         usd = card.get("prices", {}).get("usd") or "N/A"
         usd_foil = card.get("prices", {}).get("usd_foil") or "N/A"
         card_id = card["id"]
+        c_name = card.get("name")
+        s_name = card.get("set_name")
+
+        # Cache search result
+        st.session_state.card_cache[card_id] = card
 
         with c_preview:
             if img_url:
                 st.image(img_url, use_container_width=True)
 
         with c_info:
-            st.markdown(f"**{card.get('name')}** · `{card.get('set_name')}`")
+            st.markdown(f"**{c_name}** · `{s_name}`")
 
         with c_price:
             st.caption(f"Reg: **${usd}** | Foil: **${usd_foil}**")
@@ -167,25 +187,33 @@ else:
         with c_actions:
             b1, b2, b3 = st.columns(3)
             if b1.button("➕ Reg", key=f"add_reg_{card_id}_{idx}"):
-                add_card_to_library(user["id"], card_id, "nonfoil", 1, "Near Mint", float(usd) if usd != "N/A" else None)
+                add_card_to_library(
+                    user["id"], card_id, "nonfoil", 1, "Near Mint", 
+                    float(usd) if usd != "N/A" else None, 
+                    card_name=c_name, set_name=s_name, image_url=img_url
+                )
                 st.session_state.user_library = get_user_library(user["id"])
-                st.toast(f"Added {card.get('name')} (Reg)", icon="✅")
+                st.toast(f"Added {c_name} (Reg)", icon="✅")
 
             if b2.button("✨ Foil", key=f"add_foil_{card_id}_{idx}"):
-                add_card_to_library(user["id"], card_id, "foil", 1, "Near Mint", float(usd_foil) if usd_foil != "N/A" else None)
+                add_card_to_library(
+                    user["id"], card_id, "foil", 1, "Near Mint", 
+                    float(usd_foil) if usd_foil != "N/A" else None,
+                    card_name=c_name, set_name=s_name, image_url=img_url
+                )
                 st.session_state.user_library = get_user_library(user["id"])
-                st.toast(f"Added {card.get('name')} (Foil)", icon="✨")
+                st.toast(f"Added {c_name} (Foil)", icon="✨")
 
-            is_in_wishlist = card_id in st.session_state.user_wishlist
+            is_in_wishlist = card_id in wishlist_ids
             wish_label = "❤️" if is_in_wishlist else "🤍"
             if b3.button(wish_label, key=f"wish_{card_id}_{idx}"):
                 if is_in_wishlist:
                     remove_from_wishlist(user["id"], card_id)
-                    st.session_state.user_wishlist.remove(card_id)
+                    st.session_state.user_wishlist = get_user_wishlist(user["id"])
                     st.toast("Removed from Wishlist", icon="🗑️")
                 else:
-                    add_to_wishlist(user["id"], card_id)
-                    st.session_state.user_wishlist.append(card_id)
+                    add_to_wishlist(user["id"], card_id, card_name=c_name, set_name=s_name, image_url=img_url)
+                    st.session_state.user_wishlist = get_user_wishlist(user["id"])
                     st.toast("Added to Wishlist", icon="❤️")
                 st.rerun(scope="fragment")
 
@@ -197,9 +225,9 @@ else:
         c_preview, c_info, c_finish, c_qty = st.columns([1.8, 3.0, 1.5, 2.2])
         entry_id = item.get("id")
         
-        card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
-        set_name = card_data.get("set_name", "Unknown Set") if card_data else "Unknown Set"
-        img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal") if card_data else ""
+        card_name = item.get("card_name") or (card_data.get("name") if card_data else "Unknown Card")
+        set_name = item.get("set_name") or (card_data.get("set_name") if card_data else "Unknown Set")
+        img_url = item.get("image_url") or (get_card_image_url(card_data, size="large") if card_data else "")
 
         with c_preview:
             if img_url:
@@ -239,13 +267,14 @@ else:
 
     # --- FRAGMENT: WISHLIST ROW ---
     @st.fragment
-    def render_wishlist_row(scryfall_id, card_data, idx):
+    def render_wishlist_row(wish_item, card_data, idx):
         c_preview, c_info, c_price, c_actions = st.columns([1.8, 3.0, 1.5, 2.2])
+        scryfall_id = wish_item.get("scryfall_id")
 
-        card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
-        set_name = card_data.get("set_name", "Unknown Set") if card_data else "Unknown Set"
-        usd = card_data.get("prices", {}).get("usd") or "N/A" if card_data else "N/A"
-        img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal") if card_data else ""
+        card_name = wish_item.get("card_name") or (card_data.get("name") if card_data else "Unknown Card")
+        set_name = wish_item.get("set_name") or (card_data.get("set_name") if card_data else "Unknown Set")
+        usd = card_data.get("prices", {}).get("usd") if card_data else "N/A"
+        img_url = wish_item.get("image_url") or (get_card_image_url(card_data, size="large") if card_data else "")
         tcg_url = card_data.get("purchase_uris", {}).get("tcgplayer") if card_data else None
 
         with c_preview:
@@ -256,7 +285,7 @@ else:
             st.markdown(f"**{card_name}** · `{set_name}`")
 
         with c_price:
-            st.caption(f"Price: **${usd}**")
+            st.caption(f"Price: **${usd or 'N/A'}**")
 
         with c_actions:
             b_tcg, b_rem = st.columns(2)
@@ -266,7 +295,7 @@ else:
             with b_rem:
                 if st.button("❌ Remove", key=f"rem_w_{scryfall_id}_{idx}", use_container_width=True):
                     remove_from_wishlist(user["id"], scryfall_id)
-                    st.session_state.user_wishlist.remove(scryfall_id)
+                    st.session_state.user_wishlist = get_user_wishlist(user["id"])
                     st.toast("Removed from Wishlist", icon="🗑️")
                     st.rerun(scope="app")
 
@@ -290,11 +319,17 @@ else:
         filtered_library = []
         for item in library_cards:
             scryfall_id = item.get("scryfall_id")
-            card_data = get_card_by_id(scryfall_id) if scryfall_id else None
-            card_name = card_data.get("name", "").lower() if card_data else ""
-            set_name = card_data.get("set_name", "").lower() if card_data else ""
+            # Try DB text fields first, fall back to in-memory cache
+            c_name = (item.get("card_name") or "").lower()
+            s_name = (item.get("set_name") or "").lower()
             
-            if not lib_query or lib_query in card_name or lib_query in set_name:
+            card_data = None
+            if not c_name or not s_name:
+                card_data = fetch_cached_card(scryfall_id)
+                c_name = (card_data.get("name") if card_data else "").lower()
+                s_name = (card_data.get("set_name") if card_data else "").lower()
+
+            if not lib_query or lib_query in c_name or lib_query in s_name:
                 filtered_library.append((item, card_data))
 
         st.caption(f"Showing **{len(filtered_library)}** of **{len(library_cards)}** entries")
@@ -307,20 +342,26 @@ else:
     elif current_tab == "❤️ Wishlist":
         st.subheader("My Wishlist")
         wish_query = st.text_input("Filter Wishlist...", placeholder="Search wishlist by card name or set...", key="wishlist_search").strip().lower()
-        wishlist_ids = st.session_state.user_wishlist
+        wishlist_items = st.session_state.user_wishlist
         
         filtered_wishlist = []
-        for scryfall_id in wishlist_ids:
-            card_data = get_card_by_id(scryfall_id) if scryfall_id else None
-            card_name = card_data.get("name", "").lower() if card_data else ""
-            set_name = card_data.get("set_name", "").lower() if card_data else ""
+        for wish_item in wishlist_items:
+            scryfall_id = wish_item.get("scryfall_id")
+            c_name = (wish_item.get("card_name") or "").lower()
+            s_name = (wish_item.get("set_name") or "").lower()
             
-            if not wish_query or wish_query in card_name or wish_query in set_name:
-                filtered_wishlist.append((scryfall_id, card_data))
+            card_data = None
+            if not c_name or not s_name:
+                card_data = fetch_cached_card(scryfall_id)
+                c_name = (card_data.get("name") if card_data else "").lower()
+                s_name = (card_data.get("set_name") if card_data else "").lower()
 
-        st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_ids)}** items")
+            if not wish_query or wish_query in c_name or wish_query in s_name:
+                filtered_wishlist.append((wish_item, card_data))
+
+        st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_items)}** items")
         if not filtered_wishlist:
             st.info("No matching items in your wishlist.")
         else:
-            for idx, (scryfall_id, card_data) in enumerate(filtered_wishlist):
-                render_wishlist_row(scryfall_id, card_data, idx)
+            for idx, (wish_item, card_data) in enumerate(filtered_wishlist):
+                render_wishlist_row(wish_item, card_data, idx)
