@@ -102,7 +102,7 @@ if st.session_state.user is None:
         with st.form("login_form", clear_on_submit=False):
             login_username = st.text_input("Username", key="login_user")
             login_password = st.text_input("Password", type="password", key="login_pass")
-            login_submitted = st.form_submit_button("Login", use_container_width=True)
+            login_submitted = st.form_submit_button("Login", width="stretch")
 
         st.iframe(
             "data:text/html;charset=utf-8,"
@@ -143,12 +143,10 @@ else:
                     s_name = card_data.get("set_name")
                     img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
                     
-                    # Update local state
                     item["card_name"] = c_name
                     item["set_name"] = s_name
                     item["image_url"] = img_url
                     
-                    # Update database in background
                     update_user_card_metadata(item["id"], c_name, s_name, img_url)
 
         # Backfill wishlists with missing metadata
@@ -160,12 +158,10 @@ else:
                     s_name = card_data.get("set_name")
                     img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
                     
-                    # Update local state
                     item["card_name"] = c_name
                     item["set_name"] = s_name
                     item["image_url"] = img_url
                     
-                    # Update database in background
                     update_wishlist_metadata(item["id"], c_name, s_name, img_url)
 
         st.session_state.user_library = library
@@ -185,28 +181,13 @@ else:
         st.markdown("### 🃏 **MTG Hub**")
 
     with col_nav:
-        nav_col, search_col = st.columns([2.5, 1], vertical_alignment="center")
-        
-        with nav_col:
-            current_tab = st.segmented_control(
-                label="Navigation",
-                options=["🔍 Search", "📚 Library", "❤️ Wishlist"],
-                default=st.session_state.get("active_tab", "🔍 Search"),
-                key="active_tab",
-                label_visibility="collapsed"
-            )
-            
-        with search_col:
-            with st.popover("🔍 Quick Search", use_container_width=True):
-                quick_query = st.text_input(
-                    "Search Scryfall...", 
-                    placeholder="Type card name...", 
-                    key="popover_search_input"
-                )
-                if quick_query and st.button("Submit Search", use_container_width=True, key="submit_quick_search"):
-                    st.session_state["scryfall_search"] = quick_query
-                    st.session_state["active_tab"] = "🔍 Search"
-                    st.rerun()
+        current_tab = st.segmented_control(
+            label="Navigation",
+            options=["🔍 Search", "📚 Library", "❤️ Wishlist"],
+            default=st.session_state.get("active_tab", "🔍 Search"),
+            key="active_tab",
+            label_visibility="collapsed"
+        )
 
     with col_user:
         u_col, lg_col = st.columns([2, 1], vertical_alignment="center")
@@ -228,12 +209,11 @@ else:
         c_name = card.get("name")
         s_name = card.get("set_name")
 
-        # Cache search result
         st.session_state.card_cache[card_id] = card
 
         with c_preview:
             if img_url:
-                st.image(img_url, use_container_width=True)
+                st.image(img_url, width="stretch")
 
         with c_info:
             st.markdown(f"**{c_name}** · `{s_name}`")
@@ -288,7 +268,7 @@ else:
 
         with c_preview:
             if img_url:
-                st.image(img_url, use_container_width=True)
+                st.image(img_url, width="stretch")
 
         with c_info:
             st.markdown(f"**{card_name}** · `{set_name}`")
@@ -336,7 +316,7 @@ else:
 
         with c_preview:
             if img_url:
-                st.image(img_url, use_container_width=True)
+                st.image(img_url, width="stretch")
 
         with c_info:
             st.markdown(f"**{card_name}** · `{set_name}`")
@@ -348,9 +328,9 @@ else:
             b_tcg, b_rem = st.columns(2)
             with b_tcg:
                 if tcg_url:
-                    st.link_button("🛒 TCG", tcg_url, use_container_width=True)
+                    st.link_button("🛒 TCG", tcg_url, width="stretch")
             with b_rem:
-                if st.button("❌ Remove", key=f"rem_w_{scryfall_id}_{idx}", use_container_width=True):
+                if st.button("❌ Remove", key=f"rem_w_{scryfall_id}_{idx}", width="stretch"):
                     remove_from_wishlist(user["id"], scryfall_id)
                     st.session_state.user_wishlist = get_user_wishlist(user["id"])
                     st.toast("Removed from Wishlist", icon="🗑️")
