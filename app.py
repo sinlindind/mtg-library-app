@@ -16,7 +16,7 @@ from utils.auth import verify_password
 
 st.set_page_config(page_title="MTG Hub", page_icon="🃏", layout="wide", initial_sidebar_state="collapsed")
 
-# Custom CSS for compact layout, proper padding, and zero clipping
+# Custom CSS for compact layout, sticky actions, and zero clipping
 st.markdown("""
     <style>
         /* 1. Hide Streamlit's native top header bar */
@@ -41,7 +41,16 @@ st.markdown("""
             overflow: visible !important;
         }
 
-        /* 5. Standardize button heights and vertical alignment */
+        /* 5. Sticky styling for text and action columns so icons stay visible during scrolling */
+        div[data-testid="column"]:nth-of-type(2),
+        div[data-testid="column"]:nth-of-type(3),
+        div[data-testid="column"]:nth-of-type(4) {
+            position: sticky !important;
+            top: 1rem !important;
+            align-self: flex-start !important;
+        }
+
+        /* 6. Standardize button heights and vertical alignment */
         div.stButton > button {
             height: 2.25rem !important;
             padding: 0 0.5rem !important;
@@ -50,17 +59,17 @@ st.markdown("""
             margin-bottom: 0 !important;
         }
 
-        /* 6. Standardize segmented control height */
+        /* 7. Standardize segmented control height */
         div[data-testid="stSegmentedControl"] {
             min-height: 2.25rem !important;
         }
 
-        /* Compact row styling */
+        /* Compact row divider */
         .card-row {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             border-bottom: 1px solid #2e303e;
-            padding: 0.4rem 0;
+            padding: 0.8rem 0;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -129,15 +138,15 @@ else:
     # --- FRAGMENT: SEARCH ROW ---
     @st.fragment
     def render_search_row(card, idx):
-        c_preview, c_info, c_price, c_actions = st.columns([0.6, 3.7, 1.5, 2.2], vertical_alignment="center")
-        img_url = get_card_image_url(card, size="small") or get_card_image_url(card, size="normal")
+        c_preview, c_info, c_price, c_actions = st.columns([1.8, 3.0, 1.5, 2.2])
+        img_url = get_card_image_url(card, size="large") or get_card_image_url(card, size="normal")
         usd = card.get("prices", {}).get("usd") or "N/A"
         usd_foil = card.get("prices", {}).get("usd_foil") or "N/A"
         card_id = card["id"]
 
         with c_preview:
             if img_url:
-                st.image(img_url, width=60)
+                st.image(img_url, use_container_width=True)
 
         with c_info:
             st.markdown(f"**{card.get('name')}** · `{card.get('set_name')}`")
@@ -170,21 +179,23 @@ else:
                     st.toast("Added to Wishlist", icon="❤️")
                 st.rerun(scope="fragment")
 
+        st.divider()
+
     # --- FRAGMENT: LIBRARY ROW ---
     @st.fragment
     def render_library_row(item):
-        c_preview, c_info, c_finish, c_qty = st.columns([0.6, 3.7, 1.5, 2.2], vertical_alignment="center")
+        c_preview, c_info, c_finish, c_qty = st.columns([1.8, 3.0, 1.5, 2.2])
         entry_id = item.get("id")
         scryfall_id = item.get("scryfall_id")
         card_data = get_card_by_id(scryfall_id) if scryfall_id else None
         
         card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
         set_name = card_data.get("set_name", "Unknown Set") if card_data else "Unknown Set"
-        img_url = get_card_image_url(card_data, size="small") or get_card_image_url(card_data, size="normal") if card_data else ""
+        img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal") if card_data else ""
 
         with c_preview:
             if img_url:
-                st.image(img_url, width=60)
+                st.image(img_url, use_container_width=True)
 
         with c_info:
             st.markdown(f"**{card_name}** · `{set_name}`")
@@ -216,10 +227,12 @@ else:
                 item["quantity"] = qty + 1
                 st.rerun(scope="fragment")
 
+        st.divider()
+
     # --- FRAGMENT: WISHLIST ROW ---
     @st.fragment
     def render_wishlist_row(scryfall_id, idx):
-        c_preview, c_info, c_price, c_actions = st.columns([0.6, 3.7, 1.5, 2.2], vertical_alignment="center")
+        c_preview, c_info, c_price, c_actions = st.columns([1.8, 3.0, 1.5, 2.2])
         card_data = get_card_by_id(scryfall_id) if scryfall_id else None
 
         card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
@@ -230,7 +243,7 @@ else:
 
         with c_preview:
             if img_url:
-                st.image(img_url, width=60)
+                st.image(img_url, use_container_width=True)
 
         with c_info:
             st.markdown(f"**{card_name}** · `{set_name}`")
@@ -249,6 +262,8 @@ else:
                     st.session_state.user_wishlist.remove(scryfall_id)
                     st.toast("Removed from Wishlist", icon="🗑️")
                     st.rerun(scope="app")
+
+        st.divider()
 
     # --- TAB ROUTING ---
     if current_tab == "🔍 Search":
