@@ -198,7 +198,7 @@ else:
                 st.session_state.clear()
                 st.rerun()
 
-        # Dedicated Tab-Specific Search Bar inside Sticky Header
+        # Dedicated Tab-Specific Controls (Search Input + Sort Selectbox) inside Sticky Header
         if current_tab == "🔍 Search":
             search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
             with search_col:
@@ -211,7 +211,7 @@ else:
                 )
             with sort_col:
                 sort_option = st.selectbox(
-                    "Sort Results",
+                    "Sort Search Results",
                     options=[
                         "Name (A-Z)",
                         "Name (Z-A)",
@@ -227,22 +227,53 @@ else:
             active_query = f"{search_query}_{sort_option}"
 
         elif current_tab == "📚 Library":
-            lib_query = st.text_input(
-                "Filter Library",
-                placeholder="Filter Library by card name or set...",
-                key="library_search_input",
-                label_visibility="collapsed"
-            ).strip().lower()
-            active_query = lib_query
+            search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
+            with search_col:
+                lib_query = st.text_input(
+                    "Filter Library",
+                    placeholder="Filter Library by card name or set...",
+                    key="library_search_input",
+                    label_visibility="collapsed"
+                ).strip().lower()
+            with sort_col:
+                lib_sort_option = st.selectbox(
+                    "Sort Library",
+                    options=[
+                        "Name (A-Z)",
+                        "Name (Z-A)",
+                        "Quantity: High to Low",
+                        "Quantity: Low to High",
+                        "Set Name (A-Z)",
+                        "Finish (Foil First)"
+                    ],
+                    key="library_sort_option",
+                    label_visibility="collapsed"
+                )
+            active_query = f"{lib_query}_{lib_sort_option}"
 
         elif current_tab == "❤️ Wishlist":
-            wish_query = st.text_input(
-                "Filter Wishlist",
-                placeholder="Filter Wishlist by card name or set...",
-                key="wishlist_search_input",
-                label_visibility="collapsed"
-            ).strip().lower()
-            active_query = wish_query
+            search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
+            with search_col:
+                wish_query = st.text_input(
+                    "Filter Wishlist",
+                    placeholder="Filter Wishlist by card name or set...",
+                    key="wishlist_search_input",
+                    label_visibility="collapsed"
+                ).strip().lower()
+            with sort_col:
+                wish_sort_option = st.selectbox(
+                    "Sort Wishlist",
+                    options=[
+                        "Name (A-Z)",
+                        "Name (Z-A)",
+                        "Price: Low to High",
+                        "Price: High to Low",
+                        "Set Name (A-Z)"
+                    ],
+                    key="wishlist_sort_option",
+                    label_visibility="collapsed"
+                )
+            active_query = f"{wish_query}_{wish_sort_option}"
 
     # --- FRAGMENT: SEARCH ROW ---
     @st.fragment
@@ -398,7 +429,6 @@ else:
             if search_query:
                 results = search_cards(search_query)
 
-                # Sorting Helper for Prices
                 def get_usd_price(card):
                     val = card.get("prices", {}).get("usd")
                     try:
@@ -406,7 +436,6 @@ else:
                     except (ValueError, TypeError):
                         return 0.0
 
-                # In-Memory Sorting Execution
                 if sort_option == "Name (A-Z)":
                     results = sorted(results, key=lambda c: c.get("name", "").lower())
                 elif sort_option == "Name (Z-A)":
@@ -444,7 +473,21 @@ else:
                 if not lib_query or lib_query in c_name or lib_query in s_name:
                     filtered_library.append((item, card_data))
 
-            st.caption(f"Showing **{len(filtered_library)}** of **{len(library_cards)}** entries")
+            # Library Sorting Logic
+            if lib_sort_option == "Name (A-Z)":
+                filtered_library.sort(key=lambda x: (x[0].get("card_name") or "").lower())
+            elif lib_sort_option == "Name (Z-A)":
+                filtered_library.sort(key=lambda x: (x[0].get("card_name") or "").lower(), reverse=True)
+            elif lib_sort_option == "Quantity: High to Low":
+                filtered_library.sort(key=lambda x: x[0].get("quantity", 1), reverse=True)
+            elif lib_sort_option == "Quantity: Low to High":
+                filtered_library.sort(key=lambda x: x[0].get("quantity", 1))
+            elif lib_sort_option == "Set Name (A-Z)":
+                filtered_library.sort(key=lambda x: (x[0].get("set_name") or "").lower())
+            elif lib_sort_option == "Finish (Foil First)":
+                filtered_library.sort(key=lambda x: 0 if x[0].get("finish") == "foil" else 1)
+
+            st.caption(f"Showing **{len(filtered_library)}** of **{len(library_cards)}** entries (Sorted by: {lib_sort_option})")
             if not filtered_library:
                 st.info("No matching cards in your library.")
             else:
@@ -469,7 +512,30 @@ else:
                 if not wish_query or wish_query in c_name or wish_query in s_name:
                     filtered_wishlist.append((wish_item, card_data))
 
-            st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_items)}** items")
+            # Wishlist Sorting Logic Helper
+            def get_wishlist_price(pair):
+                c_data = pair[1]
+                if c_data:
+                    val = c_data.get("prices", {}).get("usd")
+                    try:
+                        return float(val) if val else 0.0
+                    except (ValueError, TypeError):
+                        return 0.0
+                return 0.0
+
+            # Wishlist Sorting Logic
+            if wish_sort_option == "Name (A-Z)":
+                filtered_wishlist.sort(key=lambda x: (x[0].get("card_name") or "").lower())
+            elif wish_sort_option == "Name (Z-A)":
+                filtered_wishlist.sort(key=lambda x: (x[0].get("card_name") or "").lower(), reverse=True)
+            elif wish_sort_option == "Price: Low to High":
+                filtered_wishlist.sort(key=get_wishlist_price)
+            elif wish_sort_option == "Price: High to Low":
+                filtered_wishlist.sort(key=get_wishlist_price, reverse=True)
+            elif wish_sort_option == "Set Name (A-Z)":
+                filtered_wishlist.sort(key=lambda x: (x[0].get("set_name") or "").lower())
+
+            st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_items)}** items (Sorted by: {wish_sort_option})")
             if not filtered_wishlist:
                 st.info("No matching items in your wishlist.")
             else:
