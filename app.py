@@ -83,7 +83,6 @@ if "user" not in st.session_state:
 if "scryfall_search" not in st.session_state:
     st.session_state.scryfall_search = ""
 
-# Initialize In-Memory Card Cache
 if "card_cache" not in st.session_state:
     st.session_state.card_cache = {}
 
@@ -94,6 +93,11 @@ def fetch_cached_card(scryfall_id):
         if card:
             st.session_state.card_cache[scryfall_id] = card
     return st.session_state.card_cache.get(scryfall_id)
+
+# Callback to handle popover search submission safely before widgets render
+def trigger_popover_search():
+    st.session_state["scryfall_search"] = st.session_state.get("popover_search_input", "")
+    st.session_state["active_tab"] = "🔍 Search"
 
 # --- UNAUTHENTICATED VIEW (LOGIN) ---
 if st.session_state.user is None:
@@ -137,7 +141,6 @@ else:
         library = get_user_library(user_id)
         wishlist = get_user_wishlist(user_id)
 
-        # Backfill user_cards with missing metadata
         for item in library:
             if not item.get("card_name") or not item.get("image_url"):
                 card_data = fetch_cached_card(item["scryfall_id"])
@@ -152,7 +155,6 @@ else:
                     
                     update_user_card_metadata(item["id"], c_name, s_name, img_url)
 
-        # Backfill wishlists with missing metadata
         for item in wishlist:
             if not item.get("card_name") or not item.get("image_url"):
                 card_data = fetch_cached_card(item["scryfall_id"])
@@ -170,11 +172,9 @@ else:
         st.session_state.user_library = library
         st.session_state.user_wishlist = wishlist
 
-    # Execute background load and backfill on initial session load
     if "user_library" not in st.session_state or "user_wishlist" not in st.session_state:
         load_and_backfill_user_data(user["id"])
 
-    # List of wishlist IDs for fast UI checking
     wishlist_ids = [w["scryfall_id"] for w in st.session_state.user_wishlist]
 
     # --- TOP NAVIGATION BAR ---
@@ -186,28 +186,26 @@ else:
     with col_nav:
         nav_col, search_col = st.columns([2.5, 1], vertical_alignment="center")
         
+        with search_col:
+            # Persistent Popover Header Search
+            with st.popover("🔍 Scryfall Search", width="stretch"):
+                st.text_input(
+                    "Search Scryfall Cards...", 
+                    value=st.session_state.get("scryfall_search", ""),
+                    placeholder="Type card name...", 
+                    key="popover_search_input",
+                    on_change=trigger_popover_search
+                )
+                st.button("Search", width="stretch", key="submit_quick_search", on_click=trigger_popover_search)
+
         with nav_col:
             current_tab = st.segmented_control(
                 label="Navigation",
                 options=["🔍 Search", "📚 Library", "❤️ Wishlist"],
-                default=st.session_state.get("active_tab", "🔍 Search"),
+                default="🔍 Search",
                 key="active_tab",
                 label_visibility="collapsed"
             )
-            
-        with search_col:
-            # Persistent Popover Header Search
-            with st.popover("🔍 Scryfall Search", width="stretch"):
-                quick_query = st.text_input(
-                    "Search Scryfall Cards...", 
-                    value=st.session_state.get("scryfall_search", ""),
-                    placeholder="Type card name...", 
-                    key="popover_search_input"
-                )
-                if st.button("Search", width="stretch", key="submit_quick_search"):
-                    st.session_state["scryfall_search"] = quick_query
-                    st.session_state["active_tab"] = "🔍 Search"
-                    st.rerun()
 
     with col_user:
         u_col, lg_col = st.columns([2, 1], vertical_alignment="center")
