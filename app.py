@@ -128,11 +128,51 @@ if st.session_state.user is None:
 else:
     user = st.session_state.user
 
-    # Cache user data in session memory
-    if "user_library" not in st.session_state:
-        st.session_state.user_library = get_user_library(user["id"])
-    if "user_wishlist" not in st.session_state:
-        st.session_state.user_wishlist = get_user_wishlist(user["id"])
+    # Initial load and background backfill function
+    def load_and_backfill_user_data(user_id):
+        library = get_user_library(user_id)
+        wishlist = get_user_wishlist(user_id)
+
+        # Backfill user_cards with missing metadata
+        for item in library:
+            if not item.get("card_name") or not item.get("image_url"):
+                card_data = fetch_cached_card(item["scryfall_id"])
+                if card_data:
+                    c_name = card_data.get("name")
+                    s_name = card_data.get("set_name")
+                    img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
+                    
+                    # Update local state
+                    item["card_name"] = c_name
+                    item["set_name"] = s_name
+                    item["image_url"] = img_url
+                    
+                    # Update database in background
+                    update_user_card_metadata(item["id"], c_name, s_name, img_url)
+
+        # Backfill wishlists with missing metadata
+        for item in wishlist:
+            if not item.get("card_name") or not item.get("image_url"):
+                card_data = fetch_cached_card(item["scryfall_id"])
+                if card_data:
+                    c_name = card_data.get("name")
+                    s_name = card_data.get("set_name")
+                    img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
+                    
+                    # Update local state
+                    item["card_name"] = c_name
+                    item["set_name"] = s_name
+                    item["image_url"] = img_url
+                    
+                    # Update database in background
+                    update_wishlist_metadata(item["id"], c_name, s_name, img_url)
+
+        st.session_state.user_library = library
+        st.session_state.user_wishlist = wishlist
+
+    # Execute background load and backfill on initial session load
+    if "user_library" not in st.session_state or "user_wishlist" not in st.session_state:
+        load_and_backfill_user_data(user["id"])
 
     # List of wishlist IDs for fast UI checking
     wishlist_ids = [w["scryfall_id"] for w in st.session_state.user_wishlist]
