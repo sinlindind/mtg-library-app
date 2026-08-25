@@ -104,15 +104,14 @@ if st.session_state.user is None:
             login_password = st.text_input("Password", type="password", key="login_pass")
             login_submitted = st.form_submit_button("Login", use_container_width=True)
 
-        # Replace st.components.v1.html with st.html or st.iframe
-        st.html("""
-            <script>
-                const inputs = window.parent.document.querySelectorAll('input[type="text"]');
-                if (inputs.length > 0) {
-                    inputs[0].focus();
-                }
-            </script>
-        """)
+        st.iframe(
+            "data:text/html;charset=utf-8,"
+            "<script>"
+            "  const inputs = window.parent.document.querySelectorAll('input[type=\"text\"]');"
+            "  if (inputs.length > 0) { inputs[0].focus(); }"
+            "</script>",
+            height=0
+        )
 
         if login_submitted:
             user_record = get_user_by_username(login_username)
