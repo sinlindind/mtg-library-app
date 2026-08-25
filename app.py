@@ -49,7 +49,7 @@ st.markdown("""
             top: 0 !important;
             z-index: 99999 !important;
             background-color: #0e1117 !important;
-            padding-top: 0.75rem !important;
+            padding-top: 0.5rem !important;
             padding-bottom: 0.75rem !important;
             margin-top: 0rem !important;
             border-bottom: 1px solid #2e303e !important;
