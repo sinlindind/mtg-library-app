@@ -18,7 +18,7 @@ from utils.auth import verify_password
 
 st.set_page_config(page_title="MTG Hub", page_icon="🃏", layout="wide", initial_sidebar_state="collapsed")
 
-# Custom CSS for sticky header bar, zero clipping, and compact layout
+# Custom CSS for sticky header bar, zero clipping, compact layout, and viewport container sizing
 st.markdown("""
     <style>
         /* 1. Hide Streamlit's native top header bar */
@@ -32,7 +32,11 @@ st.markdown("""
             display: none !important; 
         }
 
-        /* 3. Flush Viewport Padding Reset */
+        /* 3. Flush Viewport Padding Reset & Prevent Outer Browser Scrollbar */
+        html, body, [data-testid="stAppViewContainer"] {
+            overflow: hidden !important;
+        }
+
         .stApp, section.main, .block-container {
             padding-top: 0rem !important;
             margin-top: 0rem !important;
@@ -67,6 +71,13 @@ st.markdown("""
         /* 6. Standardize segmented control height */
         div[data-testid="stSegmentedControl"] {
             min-height: 2.25rem !important;
+        }
+
+        /* 7. Dynamic Viewport Sizing - Overrides Streamlit container height based on screen size */
+        div[data-testid="stVerticalBlockBorderWrapper"] > div[style*="height"] {
+            height: calc(100vh - 120px) !important;
+            height: calc(100dvh - 120px) !important;
+            max-height: calc(100dvh - 120px) !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -361,10 +372,9 @@ else:
         st.divider()
 
     # --- DYNAMICALLY KEYED SCROLLABLE CONTAINER ---
-    # Changing key forces Streamlit to rebuild the container element, resetting scroll offset to top
     container_key = f"content_{current_tab}_{active_query}"
 
-    with st.container(height=750, border=False, key=container_key):
+    with st.container(height=700, border=False, key=container_key):
         if current_tab == "🔍 Search":
             if search_query:
                 results = search_cards(search_query)
