@@ -179,18 +179,34 @@ else:
     wishlist_ids = [w["scryfall_id"] for w in st.session_state.user_wishlist]
 
     # --- TOP NAVIGATION BAR ---
-    col_brand, col_nav, col_user = st.columns([1.5, 3, 1.5], vertical_alignment="center")
+    col_brand, col_nav, col_user = st.columns([1.5, 3.5, 1.5], vertical_alignment="center")
 
     with col_brand:
         st.markdown("### 🃏 **MTG Hub**")
 
     with col_nav:
-        current_tab = st.segmented_control(
-            label="Navigation",
-            options=["🔍 Search", "📚 Library", "❤️ Wishlist"],
-            default="🔍 Search",
-            label_visibility="collapsed"
-        )
+        nav_col, search_col = st.columns([2.5, 1], vertical_alignment="center")
+        
+        with nav_col:
+            current_tab = st.segmented_control(
+                label="Navigation",
+                options=["🔍 Search", "📚 Library", "❤️ Wishlist"],
+                default=st.session_state.get("active_tab", "🔍 Search"),
+                key="active_tab",
+                label_visibility="collapsed"
+            )
+            
+        with search_col:
+            with st.popover("🔍 Quick Search", use_container_width=True):
+                quick_query = st.text_input(
+                    "Search Scryfall...", 
+                    placeholder="Type card name...", 
+                    key="popover_search_input"
+                )
+                if quick_query and st.button("Submit Search", use_container_width=True, key="submit_quick_search"):
+                    st.session_state["scryfall_search"] = quick_query
+                    st.session_state["active_tab"] = "🔍 Search"
+                    st.rerun()
 
     with col_user:
         u_col, lg_col = st.columns([2, 1], vertical_alignment="center")
@@ -346,7 +362,6 @@ else:
     if current_tab == "🔍 Search":
         st.subheader("Card Search")
         
-        # Search Bar sits outside the scroll container (stays fixed on screen)
         search_query = st.text_input(
             "Search Scryfall...", 
             placeholder="Type card name e.g. Sol Ring, Black Lotus...", 
@@ -356,16 +371,12 @@ else:
         if search_query:
             results = search_cards(search_query)
             st.caption(f"Found **{len(results)}** printings")
-            
-            # Isolated scroll area for card rows
-            with st.container(height=600, border=False):
-                for idx, card in enumerate(results):
-                    render_search_row(card, idx)
+            for idx, card in enumerate(results):
+                render_search_row(card, idx)
 
     elif current_tab == "📚 Library":
         st.subheader("My Collection")
         
-        # Filter Input sits outside the scroll container
         lib_query = st.text_input(
             "Filter Library...", 
             placeholder="Search library by card name or set...", 
@@ -390,19 +401,15 @@ else:
                 filtered_library.append((item, card_data))
 
         st.caption(f"Showing **{len(filtered_library)}** of **{len(library_cards)}** entries")
-        
         if not filtered_library:
             st.info("No matching cards in your library.")
         else:
-            # Isolated scroll area for library list
-            with st.container(height=600, border=False):
-                for item, card_data in filtered_library:
-                    render_library_row(item, card_data)
+            for item, card_data in filtered_library:
+                render_library_row(item, card_data)
 
     elif current_tab == "❤️ Wishlist":
         st.subheader("My Wishlist")
         
-        # Filter Input sits outside the scroll container
         wish_query = st.text_input(
             "Filter Wishlist...", 
             placeholder="Search wishlist by card name or set...", 
@@ -427,11 +434,8 @@ else:
                 filtered_wishlist.append((wish_item, card_data))
 
         st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_items)}** items")
-        
         if not filtered_wishlist:
             st.info("No matching items in your wishlist.")
         else:
-            # Isolated scroll area for wishlist items
-            with st.container(height=600, border=False):
-                for idx, (wish_item, card_data) in enumerate(filtered_wishlist):
-                    render_wishlist_row(wish_item, card_data, idx)
+            for idx, (wish_item, card_data) in enumerate(filtered_wishlist):
+                render_wishlist_row(wish_item, card_data, idx)
