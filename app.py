@@ -73,16 +73,6 @@ st.markdown("""
             border-bottom: 1px solid #2e303e;
             padding: 0.8rem 0;
         }
-            
-        /* 8. Make search/filter text inputs sticky at the top while scrolling */
-        div[data-testid="stTextInput"] {
-            position: sticky !important;
-            top: 0.5rem !important;
-            z-index: 999 !important;
-            background-color: var(--background-color, #0e1117) !important;
-            padding-bottom: 0.5rem !important;
-            padding-top: 0.25rem !important;
-        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -356,7 +346,7 @@ else:
     if current_tab == "🔍 Search":
         st.subheader("Card Search")
         
-        # Sticky Search Input Container
+        # Search Bar sits outside the scroll container (stays fixed on screen)
         search_query = st.text_input(
             "Search Scryfall...", 
             placeholder="Type card name e.g. Sol Ring, Black Lotus...", 
@@ -366,13 +356,16 @@ else:
         if search_query:
             results = search_cards(search_query)
             st.caption(f"Found **{len(results)}** printings")
-            for idx, card in enumerate(results):
-                render_search_row(card, idx)
+            
+            # Isolated scroll area for card rows
+            with st.container(height=600, border=False):
+                for idx, card in enumerate(results):
+                    render_search_row(card, idx)
 
     elif current_tab == "📚 Library":
         st.subheader("My Collection")
         
-        # Sticky Filter Input Container
+        # Filter Input sits outside the scroll container
         lib_query = st.text_input(
             "Filter Library...", 
             placeholder="Search library by card name or set...", 
@@ -397,16 +390,19 @@ else:
                 filtered_library.append((item, card_data))
 
         st.caption(f"Showing **{len(filtered_library)}** of **{len(library_cards)}** entries")
+        
         if not filtered_library:
             st.info("No matching cards in your library.")
         else:
-            for item, card_data in filtered_library:
-                render_library_row(item, card_data)
+            # Isolated scroll area for library list
+            with st.container(height=600, border=False):
+                for item, card_data in filtered_library:
+                    render_library_row(item, card_data)
 
     elif current_tab == "❤️ Wishlist":
         st.subheader("My Wishlist")
         
-        # Sticky Filter Input Container
+        # Filter Input sits outside the scroll container
         wish_query = st.text_input(
             "Filter Wishlist...", 
             placeholder="Search wishlist by card name or set...", 
@@ -431,8 +427,11 @@ else:
                 filtered_wishlist.append((wish_item, card_data))
 
         st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_items)}** items")
+        
         if not filtered_wishlist:
             st.info("No matching items in your wishlist.")
         else:
-            for idx, (wish_item, card_data) in enumerate(filtered_wishlist):
-                render_wishlist_row(wish_item, card_data, idx)
+            # Isolated scroll area for wishlist items
+            with st.container(height=600, border=False):
+                for idx, (wish_item, card_data) in enumerate(filtered_wishlist):
+                    render_wishlist_row(wish_item, card_data, idx)
