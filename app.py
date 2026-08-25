@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 
 from services.database import (
@@ -18,7 +19,7 @@ from utils.auth import verify_password
 
 st.set_page_config(page_title="MTG Hub", page_icon="🃏", layout="wide", initial_sidebar_state="collapsed")
 
-# Custom CSS for compact layout, sticky actions, and zero clipping
+# Custom CSS for sticky header bar, zero clipping, and native page scrolling
 st.markdown("""
     <style>
         /* 1. Hide Streamlit's native top header bar */
@@ -32,27 +33,37 @@ st.markdown("""
             display: none !important; 
         }
 
-        /* 3. Adjust top padding for main page container */
-        .block-container {
-            padding-top: 2rem !important;
-            padding-bottom: 2rem !important;
+        /* 3. Flush Viewport Padding Reset */
+        html, body, .stApp {
+            overflow-x: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
 
-        /* 4. Prevent column containers from clipping top/bottom overflow */
-        div[data-testid="column"] {
-            overflow: visible !important;
+        .stApp, section.main, .block-container {
+            padding-top: 0rem !important;
+            margin-top: 0rem !important;
+            max-width: 100% !important;
         }
 
-        /* 5. Sticky styling for text and action columns so icons stay visible during scrolling */
-        div[data-testid="column"]:nth-of-type(2),
-        div[data-testid="column"]:nth-of-type(3),
-        div[data-testid="column"]:nth-of-type(4) {
+        /* Remove auto-gap on the first element in the main layout */
+        div[data-testid="stMainBlockContainer"] {
+            padding-top: 0rem !important;
+        }
+
+        /* 4. Sticky Header Container - Locked Flush at y=0 */
+        div[data-testid="stVerticalBlock"] > div:has(div.sticky-header-marker) {
             position: sticky !important;
-            top: 1rem !important;
-            align-self: flex-start !important;
+            top: 0 !important;
+            z-index: 99999 !important;
+            background-color: #0e1117 !important;
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.75rem !important;
+            margin-top: 0rem !important;
+            border-bottom: 1px solid #2e303e !important;
         }
 
-        /* 6. Standardize button heights and vertical alignment */
+        /* 5. Standardize button heights and vertical alignment */
         div.stButton > button {
             height: 2.25rem !important;
             padding: 0 0.5rem !important;
@@ -61,17 +72,9 @@ st.markdown("""
             margin-bottom: 0 !important;
         }
 
-        /* 7. Standardize segmented control height */
+        /* 6. Standardize segmented control height */
         div[data-testid="stSegmentedControl"] {
             min-height: 2.25rem !important;
-        }
-
-        /* Compact row divider */
-        .card-row {
-            display: flex;
-            align-items: flex-start;
-            border-bottom: 1px solid #2e303e;
-            padding: 0.8rem 0;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -80,7 +83,9 @@ st.markdown("""
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# Initialize In-Memory Card Cache
+if "scryfall_search" not in st.session_state:
+    st.session_state.scryfall_search = ""
+
 if "card_cache" not in st.session_state:
     st.session_state.card_cache = {}
 
@@ -102,7 +107,7 @@ if st.session_state.user is None:
         with st.form("login_form", clear_on_submit=False):
             login_username = st.text_input("Username", key="login_user")
             login_password = st.text_input("Password", type="password", key="login_pass")
-            login_submitted = st.form_submit_button("Login", use_container_width=True)
+            login_submitted = st.form_submit_button("Login", width="stretch")
 
         st.iframe(
             "data:text/html;charset=utf-8,"
@@ -129,12 +134,10 @@ if st.session_state.user is None:
 else:
     user = st.session_state.user
 
-    # Initial load and background backfill function
     def load_and_backfill_user_data(user_id):
         library = get_user_library(user_id)
         wishlist = get_user_wishlist(user_id)
 
-        # Backfill user_cards with missing metadata
         for item in library:
             if not item.get("card_name") or not item.get("image_url"):
                 card_data = fetch_cached_card(item["scryfall_id"])
@@ -143,15 +146,12 @@ else:
                     s_name = card_data.get("set_name")
                     img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
                     
-                    # Update local state
                     item["card_name"] = c_name
                     item["set_name"] = s_name
                     item["image_url"] = img_url
                     
-                    # Update database in background
                     update_user_card_metadata(item["id"], c_name, s_name, img_url)
 
-        # Backfill wishlists with missing metadata
         for item in wishlist:
             if not item.get("card_name") or not item.get("image_url"):
                 card_data = fetch_cached_card(item["scryfall_id"])
@@ -160,46 +160,120 @@ else:
                     s_name = card_data.get("set_name")
                     img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
                     
-                    # Update local state
                     item["card_name"] = c_name
                     item["set_name"] = s_name
                     item["image_url"] = img_url
                     
-                    # Update database in background
                     update_wishlist_metadata(item["id"], c_name, s_name, img_url)
 
         st.session_state.user_library = library
         st.session_state.user_wishlist = wishlist
 
-    # Execute background load and backfill on initial session load
     if "user_library" not in st.session_state or "user_wishlist" not in st.session_state:
         load_and_backfill_user_data(user["id"])
 
-    # List of wishlist IDs for fast UI checking
     wishlist_ids = [w["scryfall_id"] for w in st.session_state.user_wishlist]
 
-    # --- TOP NAVIGATION BAR ---
-    col_brand, col_nav, col_user = st.columns([1.5, 3, 1.5], vertical_alignment="center")
+    # --- STICKY TOP HEADER CONTAINER ---
+    with st.container():
+        st.markdown('<div class="sticky-header-marker"></div>', unsafe_allow_html=True)
+        col_brand, col_nav, col_user = st.columns([1.2, 3.8, 1.2], vertical_alignment="center")
 
-    with col_brand:
-        st.markdown("### 🃏 **MTG Hub**")
+        with col_brand:
+            st.markdown("### 🃏 **MTG Hub**")
 
-    with col_nav:
-        current_tab = st.segmented_control(
-            label="Navigation",
-            options=["🔍 Search", "📚 Library", "❤️ Wishlist"],
-            default="🔍 Search",
-            label_visibility="collapsed"
-        )
+        with col_nav:
+            current_tab = st.segmented_control(
+                label="Navigation",
+                options=["🔍 Search", "📚 Library", "❤️ Wishlist"],
+                default="🔍 Search",
+                key="active_tab",
+                label_visibility="collapsed"
+            )
 
-    with col_user:
-        u_col, lg_col = st.columns([2, 1], vertical_alignment="center")
-        u_col.caption(f"👤 **{user['username']}**")
-        if lg_col.button("Logout", key="top_logout_btn"):
-            st.session_state.clear()
-            st.rerun()
+        with col_user:
+            u_col, lg_col = st.columns([1.5, 1], vertical_alignment="center")
+            u_col.caption(f"👤 **{user['username']}**")
+            if lg_col.button("Logout", key="top_logout_btn"):
+                st.session_state.clear()
+                st.rerun()
 
-    st.divider()
+        # Dedicated Tab-Specific Controls (Search Input + Sort Selectbox) inside Sticky Header
+        if current_tab == "🔍 Search":
+            search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
+            with search_col:
+                search_query = st.text_input(
+                    "Scryfall Search",
+                    value=st.session_state.get("scryfall_search", ""),
+                    placeholder="Search Scryfall... e.g. Sol Ring, Black Lotus",
+                    key="scryfall_search_input",
+                    label_visibility="collapsed"
+                )
+            with sort_col:
+                sort_option = st.selectbox(
+                    "Sort Search Results",
+                    options=[
+                        "Name (A-Z)",
+                        "Name (Z-A)",
+                        "Price: Low to High",
+                        "Price: High to Low",
+                        "Released: Newest",
+                        "Released: Oldest"
+                    ],
+                    key="search_sort_option",
+                    label_visibility="collapsed"
+                )
+            st.session_state["scryfall_search"] = search_query
+            active_query = f"{search_query}_{sort_option}"
+
+        elif current_tab == "📚 Library":
+            search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
+            with search_col:
+                lib_query = st.text_input(
+                    "Filter Library",
+                    placeholder="Filter Library by card name or set...",
+                    key="library_search_input",
+                    label_visibility="collapsed"
+                ).strip().lower()
+            with sort_col:
+                lib_sort_option = st.selectbox(
+                    "Sort Library",
+                    options=[
+                        "Name (A-Z)",
+                        "Name (Z-A)",
+                        "Quantity: High to Low",
+                        "Quantity: Low to High",
+                        "Set Name (A-Z)",
+                        "Finish (Foil First)"
+                    ],
+                    key="library_sort_option",
+                    label_visibility="collapsed"
+                )
+            active_query = f"{lib_query}_{lib_sort_option}"
+
+        elif current_tab == "❤️ Wishlist":
+            search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
+            with search_col:
+                wish_query = st.text_input(
+                    "Filter Wishlist",
+                    placeholder="Filter Wishlist by card name or set...",
+                    key="wishlist_search_input",
+                    label_visibility="collapsed"
+                ).strip().lower()
+            with sort_col:
+                wish_sort_option = st.selectbox(
+                    "Sort Wishlist",
+                    options=[
+                        "Name (A-Z)",
+                        "Name (Z-A)",
+                        "Price: Low to High",
+                        "Price: High to Low",
+                        "Set Name (A-Z)"
+                    ],
+                    key="wishlist_sort_option",
+                    label_visibility="collapsed"
+                )
+            active_query = f"{wish_query}_{wish_sort_option}"
 
     # --- FRAGMENT: SEARCH ROW ---
     @st.fragment
@@ -212,12 +286,11 @@ else:
         c_name = card.get("name")
         s_name = card.get("set_name")
 
-        # Cache search result
         st.session_state.card_cache[card_id] = card
 
         with c_preview:
             if img_url:
-                st.image(img_url, use_container_width=True)
+                st.image(img_url, width="stretch")
 
         with c_info:
             st.markdown(f"**{c_name}** · `{s_name}`")
@@ -272,7 +345,7 @@ else:
 
         with c_preview:
             if img_url:
-                st.image(img_url, use_container_width=True)
+                st.image(img_url, width="stretch")
 
         with c_info:
             st.markdown(f"**{card_name}** · `{set_name}`")
@@ -320,7 +393,7 @@ else:
 
         with c_preview:
             if img_url:
-                st.image(img_url, use_container_width=True)
+                st.image(img_url, width="stretch")
 
         with c_info:
             st.markdown(f"**{card_name}** · `{set_name}`")
@@ -332,9 +405,9 @@ else:
             b_tcg, b_rem = st.columns(2)
             with b_tcg:
                 if tcg_url:
-                    st.link_button("🛒 TCG", tcg_url, use_container_width=True)
+                    st.link_button("🛒 TCG", tcg_url, width="stretch")
             with b_rem:
-                if st.button("❌ Remove", key=f"rem_w_{scryfall_id}_{idx}", use_container_width=True):
+                if st.button("❌ Remove", key=f"rem_w_{scryfall_id}_{idx}", width="stretch"):
                     remove_from_wishlist(user["id"], scryfall_id)
                     st.session_state.user_wishlist = get_user_wishlist(user["id"])
                     st.toast("Removed from Wishlist", icon="🗑️")
@@ -342,67 +415,129 @@ else:
 
         st.divider()
 
-    # --- TAB ROUTING ---
-    if current_tab == "🔍 Search":
-        st.subheader("Card Search")
-        search_query = st.text_input("Search Scryfall...", placeholder="Type card name e.g. Sol Ring, Black Lotus...", key="scryfall_search")
-        if search_query:
-            results = search_cards(search_query)
-            st.caption(f"Found **{len(results)}** printings")
-            for idx, card in enumerate(results):
-                render_search_row(card, idx)
+    # --- DYNAMICALLY KEYED CONTENT CONTAINER ---
+    container_key = f"content_{current_tab}_{active_query}"
 
-    elif current_tab == "📚 Library":
-        st.subheader("My Collection")
-        lib_query = st.text_input("Filter Library...", placeholder="Search library by card name or set...", key="library_search").strip().lower()
-        library_cards = [c for c in st.session_state.user_library if c.get("quantity", 0) > 0]
-        
-        filtered_library = []
-        for item in library_cards:
-            scryfall_id = item.get("scryfall_id")
-            # Try DB text fields first, fall back to in-memory cache
-            c_name = (item.get("card_name") or "").lower()
-            s_name = (item.get("set_name") or "").lower()
+    # Reset browser scroll top position whenever active query or tab changes
+    components.html(
+        "<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>",
+        height=0
+    )
+
+    with st.container(border=False, key=container_key):
+        if current_tab == "🔍 Search":
+            if search_query:
+                results = search_cards(search_query)
+
+                def get_usd_price(card):
+                    val = card.get("prices", {}).get("usd")
+                    try:
+                        return float(val) if val else 0.0
+                    except (ValueError, TypeError):
+                        return 0.0
+
+                if sort_option == "Name (A-Z)":
+                    results = sorted(results, key=lambda c: c.get("name", "").lower())
+                elif sort_option == "Name (Z-A)":
+                    results = sorted(results, key=lambda c: c.get("name", "").lower(), reverse=True)
+                elif sort_option == "Price: Low to High":
+                    results = sorted(results, key=get_usd_price)
+                elif sort_option == "Price: High to Low":
+                    results = sorted(results, key=get_usd_price, reverse=True)
+                elif sort_option == "Released: Newest":
+                    results = sorted(results, key=lambda c: c.get("released_at", ""), reverse=True)
+                elif sort_option == "Released: Oldest":
+                    results = sorted(results, key=lambda c: c.get("released_at", ""))
+
+                st.caption(f"Found **{len(results)}** printings for `{search_query}` (Sorted by: {sort_option})")
+                for idx, card in enumerate(results):
+                    render_search_row(card, idx)
+            else:
+                st.info("Type a card name in the search bar above to query Scryfall.")
+
+        elif current_tab == "📚 Library":
+            library_cards = [c for c in st.session_state.user_library if c.get("quantity", 0) > 0]
             
-            card_data = None
-            if not c_name or not s_name:
-                card_data = fetch_cached_card(scryfall_id)
-                c_name = (card_data.get("name") if card_data else "").lower()
-                s_name = (card_data.get("set_name") if card_data else "").lower()
+            filtered_library = []
+            for item in library_cards:
+                scryfall_id = item.get("scryfall_id")
+                c_name = (item.get("card_name") or "").lower()
+                s_name = (item.get("set_name") or "").lower()
+                
+                card_data = None
+                if not c_name or not s_name:
+                    card_data = fetch_cached_card(scryfall_id)
+                    c_name = (card_data.get("name") if card_data else "").lower()
+                    s_name = (card_data.get("set_name") if card_data else "").lower()
 
-            if not lib_query or lib_query in c_name or lib_query in s_name:
-                filtered_library.append((item, card_data))
+                if not lib_query or lib_query in c_name or lib_query in s_name:
+                    filtered_library.append((item, card_data))
 
-        st.caption(f"Showing **{len(filtered_library)}** of **{len(library_cards)}** entries")
-        if not filtered_library:
-            st.info("No matching cards in your library.")
-        else:
-            for item, card_data in filtered_library:
-                render_library_row(item, card_data)
+            # Library Sorting Logic
+            if lib_sort_option == "Name (A-Z)":
+                filtered_library.sort(key=lambda x: (x[0].get("card_name") or "").lower())
+            elif lib_sort_option == "Name (Z-A)":
+                filtered_library.sort(key=lambda x: (x[0].get("card_name") or "").lower(), reverse=True)
+            elif lib_sort_option == "Quantity: High to Low":
+                filtered_library.sort(key=lambda x: x[0].get("quantity", 1), reverse=True)
+            elif lib_sort_option == "Quantity: Low to High":
+                filtered_library.sort(key=lambda x: x[0].get("quantity", 1))
+            elif lib_sort_option == "Set Name (A-Z)":
+                filtered_library.sort(key=lambda x: (x[0].get("set_name") or "").lower())
+            elif lib_sort_option == "Finish (Foil First)":
+                filtered_library.sort(key=lambda x: 0 if x[0].get("finish") == "foil" else 1)
 
-    elif current_tab == "❤️ Wishlist":
-        st.subheader("My Wishlist")
-        wish_query = st.text_input("Filter Wishlist...", placeholder="Search wishlist by card name or set...", key="wishlist_search").strip().lower()
-        wishlist_items = st.session_state.user_wishlist
-        
-        filtered_wishlist = []
-        for wish_item in wishlist_items:
-            scryfall_id = wish_item.get("scryfall_id")
-            c_name = (wish_item.get("card_name") or "").lower()
-            s_name = (wish_item.get("set_name") or "").lower()
+            st.caption(f"Showing **{len(filtered_library)}** of **{len(library_cards)}** entries (Sorted by: {lib_sort_option})")
+            if not filtered_library:
+                st.info("No matching cards in your library.")
+            else:
+                for item, card_data in filtered_library:
+                    render_library_row(item, card_data)
+
+        elif current_tab == "❤️ Wishlist":
+            wishlist_items = st.session_state.user_wishlist
             
-            card_data = None
-            if not c_name or not s_name:
-                card_data = fetch_cached_card(scryfall_id)
-                c_name = (card_data.get("name") if card_data else "").lower()
-                s_name = (card_data.get("set_name") if card_data else "").lower()
+            filtered_wishlist = []
+            for wish_item in wishlist_items:
+                scryfall_id = wish_item.get("scryfall_id")
+                c_name = (wish_item.get("card_name") or "").lower()
+                s_name = (wish_item.get("set_name") or "").lower()
+                
+                card_data = None
+                if not c_name or not s_name:
+                    card_data = fetch_cached_card(scryfall_id)
+                    c_name = (card_data.get("name") if card_data else "").lower()
+                    s_name = (card_data.get("set_name") if card_data else "").lower()
 
-            if not wish_query or wish_query in c_name or wish_query in s_name:
-                filtered_wishlist.append((wish_item, card_data))
+                if not wish_query or wish_query in c_name or wish_query in s_name:
+                    filtered_wishlist.append((wish_item, card_data))
 
-        st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_items)}** items")
-        if not filtered_wishlist:
-            st.info("No matching items in your wishlist.")
-        else:
-            for idx, (wish_item, card_data) in enumerate(filtered_wishlist):
-                render_wishlist_row(wish_item, card_data, idx)
+            # Wishlist Sorting Logic Helper
+            def get_wishlist_price(pair):
+                c_data = pair[1]
+                if c_data:
+                    val = c_data.get("prices", {}).get("usd")
+                    try:
+                        return float(val) if val else 0.0
+                    except (ValueError, TypeError):
+                        return 0.0
+                return 0.0
+
+            # Wishlist Sorting Logic
+            if wish_sort_option == "Name (A-Z)":
+                filtered_wishlist.sort(key=lambda x: (x[0].get("card_name") or "").lower())
+            elif wish_sort_option == "Name (Z-A)":
+                filtered_wishlist.sort(key=lambda x: (x[0].get("card_name") or "").lower(), reverse=True)
+            elif wish_sort_option == "Price: Low to High":
+                filtered_wishlist.sort(key=get_wishlist_price)
+            elif wish_sort_option == "Price: High to Low":
+                filtered_wishlist.sort(key=get_wishlist_price, reverse=True)
+            elif wish_sort_option == "Set Name (A-Z)":
+                filtered_wishlist.sort(key=lambda x: (x[0].get("set_name") or "").lower())
+
+            st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_items)}** items (Sorted by: {wish_sort_option})")
+            if not filtered_wishlist:
+                st.info("No matching items in your wishlist.")
+            else:
+                for idx, (wish_item, card_data) in enumerate(filtered_wishlist):
+                    render_wishlist_row(wish_item, card_data, idx)
