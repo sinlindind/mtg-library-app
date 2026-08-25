@@ -191,7 +191,7 @@ else:
         
         card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
         set_name = card_data.get("set_name", "Unknown Set") if card_data else "Unknown Set"
-        img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal") if card_data else ""
+        img_url = get_card_image_url(card_data, size="small") or get_card_image_url(card_data, size="normal") if card_data else ""
 
         with c_preview:
             if img_url:
@@ -238,7 +238,7 @@ else:
         card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
         set_name = card_data.get("set_name", "Unknown Set") if card_data else "Unknown Set"
         usd = card_data.get("prices", {}).get("usd") or "N/A" if card_data else "N/A"
-        img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal") if card_data else ""
+        img_url = get_card_image_url(card_data, size="small") or get_card_image_url(card_data, size="normal") if card_data else ""
         tcg_url = card_data.get("purchase_uris", {}).get("tcgplayer") if card_data else None
 
         with c_preview:
