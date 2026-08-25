@@ -195,14 +195,14 @@ else:
     # --- FRAGMENT: LIBRARY ROW ---
     @st.fragment
     def render_library_row(item):
-        c_preview, c_info, c_finish, c_qty = st.columns([1.8, 3.0, 1.5, 2.2])
+        c_preview, c_info, c_finish, c_qty = st.columns([.5, 3.0, 1.5, 2.2])
         entry_id = item.get("id")
         scryfall_id = item.get("scryfall_id")
         card_data = get_card_by_id(scryfall_id) if scryfall_id else None
         
         card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
         set_name = card_data.get("set_name", "Unknown Set") if card_data else "Unknown Set"
-        img_url = get_card_image_url(card_data, size="small") or get_card_image_url(card_data, size="normal") if card_data else ""
+        img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal") if card_data else ""
 
         with c_preview:
             if img_url:
@@ -243,13 +243,13 @@ else:
     # --- FRAGMENT: WISHLIST ROW ---
     @st.fragment
     def render_wishlist_row(scryfall_id, idx):
-        c_preview, c_info, c_price, c_actions = st.columns([1.8, 3.0, 1.5, 2.2])
+        c_preview, c_info, c_price, c_actions = st.columns([.5, 3.0, 1.5, 2.2])
         card_data = get_card_by_id(scryfall_id) if scryfall_id else None
 
         card_name = card_data.get("name", "Unknown Card") if card_data else "Unknown Card"
         set_name = card_data.get("set_name", "Unknown Set") if card_data else "Unknown Set"
         usd = card_data.get("prices", {}).get("usd") or "N/A" if card_data else "N/A"
-        img_url = get_card_image_url(card_data, size="small") or get_card_image_url(card_data, size="normal") if card_data else ""
+        img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal") if card_data else ""
         tcg_url = card_data.get("purchase_uris", {}).get("tcgplayer") if card_data else None
 
         with c_preview:
