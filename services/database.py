@@ -56,11 +56,13 @@ def add_card_to_library(
     condition: str = "Near Mint", 
     purchase_price: float = None,
     language: str = "en",
-    notes: str = None
+    notes: str = None,
+    card_name: str = None,
+    set_name: str = None,
+    image_url: str = None
 ):
     """
-    Adds or updates a card entry in user_cards.
-    Increments quantity if the unique card entry already exists.
+    Adds or updates a card entry in user_cards with denormalized metadata.
     """
     existing_entry = supabase.table("user_cards") \
         .select("id, quantity") \
@@ -87,7 +89,10 @@ def add_card_to_library(
             "language": language,
             "quantity": quantity,
             "purchase_price": purchase_price,
-            "notes": notes
+            "notes": notes,
+            "card_name": card_name,
+            "set_name": set_name,
+            "image_url": image_url
         }
         response = supabase.table("user_cards").insert(data).execute()
 
@@ -132,17 +137,26 @@ def remove_from_library(entry_id: str):
 # Wishlist Functions
 # ==========================================
 
-def add_to_wishlist(user_id: str, scryfall_id: str) -> bool:
-    """Adds a card to the user's wishlist in Supabase."""
+def add_to_wishlist(
+    user_id: str, 
+    scryfall_id: str, 
+    card_name: str = None, 
+    set_name: str = None, 
+    image_url: str = None
+) -> bool:
+    """Adds a card with metadata to the user's wishlist in Supabase."""
     try:
         data = {
             "user_id": user_id,
-            "scryfall_id": scryfall_id
+            "scryfall_id": scryfall_id,
+            "card_name": card_name,
+            "set_name": set_name,
+            "image_url": image_url
         }
         response = supabase.table("wishlists").insert(data).execute()
         return bool(response.data)
     except Exception:
-        return False  # Handles duplicate unique constraint gracefully
+        return False
 
 
 def remove_from_wishlist(user_id: str, scryfall_id: str) -> None:
@@ -154,21 +168,18 @@ def remove_from_wishlist(user_id: str, scryfall_id: str) -> None:
         .execute()
 
 
-def get_user_wishlist(user_id: str) -> list[str]:
-    """Returns a list of Scryfall IDs in the user's wishlist."""
+def get_user_wishlist(user_id: str) -> list[dict]:
+    """Returns all rows in the user's wishlist."""
     response = supabase.table("wishlists") \
-        .select("scryfall_id") \
+        .select("*") \
         .eq("user_id", user_id) \
         .execute()
     
-    if response.data:
-        return [row["scryfall_id"] for row in response.data]
-    return []
+    return response.data if response.data else []
 
 # ==========================================
 # Card Tagging Functions
 # ==========================================
 
 def update_card_tags(entry_id: int, tags: list[str]):
-    # Pure Supabase query — no Scryfall calls or headers involved
     return supabase.table("user_cards").update({"tags": tags}).eq("id", entry_id).execute()
