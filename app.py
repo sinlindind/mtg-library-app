@@ -263,7 +263,7 @@ else:
     # --- FRAGMENT: LIBRARY ROW ---
     @st.fragment
     def render_library_row(item, card_data):
-        c_preview, c_info, c_finish, c_qty = st.columns([1.8, 3.0, 1.5, 2.2])
+        c_preview, c_info, c_finish, c_qty = st.columns([.4, 3.0, 1.5, 2.2])
         entry_id = item.get("id")
         
         card_name = item.get("card_name") or (card_data.get("name") if card_data else "Unknown Card")
@@ -309,7 +309,7 @@ else:
     # --- FRAGMENT: WISHLIST ROW ---
     @st.fragment
     def render_wishlist_row(wish_item, card_data, idx):
-        c_preview, c_info, c_price, c_actions = st.columns([1.8, 3.0, 1.5, 2.2])
+        c_preview, c_info, c_price, c_actions = st.columns([.4, 3.0, 1.5, 2.2])
         scryfall_id = wish_item.get("scryfall_id")
 
         card_name = wish_item.get("card_name") or (card_data.get("name") if card_data else "Unknown Card")
