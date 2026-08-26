@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 
 from services.database import (
     get_user_by_username,
@@ -95,12 +94,12 @@ if "lib_page" not in st.session_state:
 if "wish_page" not in st.session_state:
     st.session_state.wish_page = 1
 
-if "scroll_counter" not in st.session_state:
-    st.session_state.scroll_counter = 0
+if "should_scroll_top" not in st.session_state:
+    st.session_state.should_scroll_top = False
 
 def trigger_scroll_to_top():
-    """Increments scroll counter to trigger parent window scroll script."""
-    st.session_state.scroll_counter += 1
+    """Sets a flag to force window scrolling to top on render pass."""
+    st.session_state.should_scroll_top = True
 
 def fetch_cached_card(scryfall_id):
     """Retrieve card payload from session memory or query network once."""
@@ -139,7 +138,7 @@ def render_pagination_bar(page_key, current_page, total_pages, total_items, key_
 
 # --- DIALOG POPUP FOR MANAGING VARIANTS & TAGS ---
 @st.dialog("Manage Card Inventory")
-def manage_card_inventory_dialog(group, user_id):
+def manage_card_inventory_dialog(group, user_id, all_existing_tags):
     scryfall_id = group["scryfall_id"]
     entries = group["entries"]
     first_entry = entries[0]
@@ -161,33 +160,41 @@ def manage_card_inventory_dialog(group, user_id):
         current_tags = entry.get("tags") or []
 
         st.markdown(f"**{finish}** ({cond})")
-        c1, c2, c3 = st.columns([2, 2, 1], vertical_alignment="center")
-        with c1:
-            new_qty = st.number_input(
-                "Qty", 
-                min_value=0, 
-                value=int(qty), 
-                key=f"dlg_qty_{entry_id}"
-            )
-        with c2:
-            tag_input = st.text_input(
-                "Tags (comma-separated)",
-                value=", ".join(current_tags),
-                key=f"dlg_tags_{entry_id}",
-                placeholder="Commander, Foil, Trade"
-            )
-        with c3:
-            st.write("") # Spacer
-            if st.button("💾", key=f"dlg_save_{entry_id}"):
-                if new_qty == 0:
-                    remove_from_library(entry_id)
-                    st.toast("Variant deleted", icon="🗑️")
-                else:
-                    parsed_tags = [t.strip() for t in tag_input.split(",") if t.strip()]
-                    update_library_card(entry_id, quantity=new_qty)
-                    update_card_tags(entry_id, parsed_tags)
-                    st.toast("Updated variant & tags", icon="✅")
-                st.rerun(scope="app")
+        
+        new_qty = st.number_input(
+            "Qty", 
+            min_value=0, 
+            value=int(qty), 
+            key=f"dlg_qty_{entry_id}"
+        )
+        
+        # Select from existing collection tags
+        selected_existing = st.multiselect(
+            "Select Existing Tags",
+            options=all_existing_tags,
+            default=[t for t in current_tags if t in all_existing_tags],
+            key=f"dlg_tags_select_{entry_id}"
+        )
+        
+        # Add brand-new tags manually
+        new_custom_tags = st.text_input(
+            "Create New Tags (comma-separated)",
+            value=", ".join([t for t in current_tags if t not in all_existing_tags]),
+            key=f"dlg_tags_new_{entry_id}",
+            placeholder="e.g. Vintage, Signed, Proxy"
+        )
+        
+        if st.button("💾 Save Changes", key=f"dlg_save_{entry_id}"):
+            if new_qty == 0:
+                remove_from_library(entry_id)
+                st.toast("Variant deleted", icon="🗑️")
+            else:
+                parsed_new = [t.strip() for t in new_custom_tags.split(",") if t.strip()]
+                combined_tags = list(set(selected_existing + parsed_new))
+                update_library_card(entry_id, quantity=new_qty)
+                update_card_tags(entry_id, combined_tags)
+                st.toast("Updated variant & tags", icon="✅")
+            st.rerun(scope="app")
 
         st.divider()
 
@@ -229,13 +236,13 @@ if st.session_state.user is None:
             login_password = st.text_input("Password", type="password", key="login_pass")
             login_submitted = st.form_submit_button("Login", width="stretch")
 
-        st.iframe(
-            "data:text/html;charset=utf-8,"
-            "<script>"
-            "  const inputs = window.parent.document.querySelectorAll('input[type=\"text\"]');"
-            "  if (inputs.length > 0) { inputs[0].focus(); }"
-            "</script>",
-            height=1
+        st.html(
+            """
+            <script>
+              const inputs = window.top.document.querySelectorAll('input[type="text"]');
+              if (inputs.length > 0) { inputs[0].focus(); }
+            </script>
+            """
         )
 
         if login_submitted:
@@ -254,18 +261,33 @@ if st.session_state.user is None:
 else:
     user = st.session_state.user
 
-    # Execute Window Scroll Command via Dynamic Component Injection
-    components.html(
-        f"""
-        <script>
-            window.parent.scrollTo({{top: 0, left: 0, behavior: 'instant'}});
-            window.scrollTo({{top: 0, left: 0, behavior: 'instant'}});
-        </script>
-        <div data-scroll-id="{st.session_state.scroll_counter}"></div>
-        """,
-        height=0,
-        width=0
+    # Handle Top Window Scrolling on Rerun via native DOM HTML injection
+    if st.session_state.should_scroll_top:
+        st.html(
+            """
+            <script>
+                window.top.scrollTo({top: 0, left: 0, behavior: 'instant'});
+                document.documentElement.scrollTop = 0;
+                document.body.scrollTop = 0;
+            </script>
+            """
+        )
+        st.session_state.should_scroll_top = False
+
+    # Fetch total dataset to populate filter tags & dialog dropdowns
+    all_lib_items, _ = get_user_library_paginated(
+        user_id=user["id"],
+        limit=10000,
+        offset=0
     )
+    
+    existing_tags = set()
+    for group in all_lib_items:
+        for entry in group.get("entries", []):
+            if entry.get("tags"):
+                existing_tags.update(entry.get("tags"))
+    
+    sorted_tags = sorted(list(existing_tags))
 
     # --- STICKY TOP HEADER CONTAINER ---
     with st.container():
@@ -344,21 +366,6 @@ else:
                     label_visibility="collapsed",
                     on_change=lambda: st.session_state.update({"lib_page": 1})
                 )
-
-            # Fetch unfiltered dataset once to extract all unique tags dynamically
-            all_lib_items, _ = get_user_library_paginated(
-                user_id=user["id"],
-                limit=10000,
-                offset=0
-            )
-            
-            existing_tags = set()
-            for group in all_lib_items:
-                for entry in group.get("entries", []):
-                    if entry.get("tags"):
-                        existing_tags.update(entry.get("tags"))
-            
-            sorted_tags = sorted(list(existing_tags))
 
             if sorted_tags:
                 with st.expander("🏷️ **Filter by Tags**", expanded=False):
@@ -449,7 +456,7 @@ else:
 
     # --- FRAGMENT: LIBRARY ROW (AGGREGATED WITH POPUP MODAL & TAGS) ---
     @st.fragment
-    def render_library_row(group):
+    def render_library_row(group, sorted_tags):
         c_preview, c_info, c_details, c_total, c_action = st.columns([0.5, 2.5, 2.5, 1.0, 1.5], vertical_alignment="center")
         
         scryfall_id = group["scryfall_id"]
@@ -498,7 +505,7 @@ else:
 
         with c_action:
             if st.button("⚙️ Manage", key=f"btn_manage_{scryfall_id}", width="stretch"):
-                manage_card_inventory_dialog(group, user["id"])
+                manage_card_inventory_dialog(group, user["id"], sorted_tags)
 
         st.divider()
 
@@ -591,7 +598,7 @@ else:
                 on_change=lambda: st.session_state.update({"lib_page": 1})
             )
 
-            # Retrieve database library cards
+            # Retrieve library cards
             paged_library, total_lib_items = get_user_library_paginated(
                 user_id=user["id"],
                 limit=10000 if selected_tags else lib_page_size,
@@ -624,7 +631,7 @@ else:
                 st.info("No matching cards in your library.")
             else:
                 for group in paged_library:
-                    render_library_row(group)
+                    render_library_row(group, sorted_tags)
 
                 # Bottom Pagination Bar
                 render_pagination_bar("lib_page", st.session_state.lib_page, total_lib_pages, total_lib_items, key_suffix="bottom")
