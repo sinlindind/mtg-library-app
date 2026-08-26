@@ -11,7 +11,8 @@ from services.database import (
     add_to_wishlist,
     remove_from_wishlist,
     update_user_card_metadata,
-    update_wishlist_metadata
+    update_wishlist_metadata,
+    update_card_tags
 )
 from services.scryfall import search_cards, get_card_by_id, get_card_image_url
 from utils.auth import verify_password
@@ -94,6 +95,13 @@ if "lib_page" not in st.session_state:
 if "wish_page" not in st.session_state:
     st.session_state.wish_page = 1
 
+def scroll_to_top():
+    """Scrolls parent window top to view top of results when page changes."""
+    components.html(
+        "<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>",
+        height=0
+    )
+
 def fetch_cached_card(scryfall_id):
     """Retrieve card payload from session memory or query network once."""
     if scryfall_id not in st.session_state.card_cache:
@@ -102,30 +110,34 @@ def fetch_cached_card(scryfall_id):
             st.session_state.card_cache[scryfall_id] = card
     return st.session_state.card_cache.get(scryfall_id)
 
-def render_pagination_bar(page_key, current_page, total_pages, total_items, key_suffix="top"):
-    """Reusable toolbar for page navigation controls."""
+def render_pagination_bar(page_key, current_page, total_pages, total_items, key_suffix="bottom"):
+    """Reusable bottom toolbar for page navigation controls."""
     p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns([1, 1, 3, 1, 1], vertical_alignment="center")
     
     with p_col1:
         if st.button("⏮️", key=f"{page_key}_first_{key_suffix}", disabled=current_page == 1):
             st.session_state[page_key] = 1
+            scroll_to_top()
             st.rerun()
     with p_col2:
         if st.button("◀️", key=f"{page_key}_prev_{key_suffix}", disabled=current_page == 1):
             st.session_state[page_key] -= 1
+            scroll_to_top()
             st.rerun()
     with p_col3:
         st.caption(f"Page **{current_page}** of **{total_pages}** ({total_items} items total)")
     with p_col4:
         if st.button("▶️", key=f"{page_key}_next_{key_suffix}", disabled=current_page == total_pages):
             st.session_state[page_key] += 1
+            scroll_to_top()
             st.rerun()
     with p_col5:
         if st.button("⏭️", key=f"{page_key}_last_{key_suffix}", disabled=current_page == total_pages):
             st.session_state[page_key] = total_pages
+            scroll_to_top()
             st.rerun()
 
-# --- DIALOG POPUP FOR MANAGING VARIANTS ---
+# --- DIALOG POPUP FOR MANAGING VARIANTS & TAGS ---
 @st.dialog("Manage Card Inventory")
 def manage_card_inventory_dialog(group, user_id):
     scryfall_id = group["scryfall_id"]
@@ -138,42 +150,48 @@ def manage_card_inventory_dialog(group, user_id):
     st.markdown(f"### **{card_name}**")
     st.caption(f"Set: `{set_name}`")
 
-    st.markdown("#### **Current Copies in Collection**")
+    st.markdown("#### **Current Copies & Tags**")
     
+    # Render existing finishes, conditions, and tags
     for entry in entries:
         entry_id = entry.get("id")
         finish = entry.get("finish", "nonfoil").capitalize()
         cond = entry.get("condition", "NM")
         qty = entry.get("quantity", 1)
+        current_tags = entry.get("tags") or []
 
-        c1, c2, c3, c4 = st.columns([2, 1.5, 2, 1], vertical_alignment="center")
+        st.markdown(f"**{finish}** ({cond})")
+        c1, c2, c3 = st.columns([2, 2, 1], vertical_alignment="center")
         with c1:
-            st.write(f"**{finish}** ({cond})")
-        with c2:
             new_qty = st.number_input(
                 "Qty", 
                 min_value=0, 
                 value=int(qty), 
-                key=f"dlg_qty_{entry_id}",
-                label_visibility="collapsed"
+                key=f"dlg_qty_{entry_id}"
+            )
+        with c2:
+            tag_input = st.text_input(
+                "Tags (comma-separated)",
+                value=", ".join(current_tags),
+                key=f"dlg_tags_{entry_id}",
+                placeholder="Commander, Foil, Trade"
             )
         with c3:
-            if st.button("Save", key=f"dlg_save_{entry_id}"):
+            st.write("") # Spacer
+            if st.button("Save Entry", key=f"dlg_save_{entry_id}"):
                 if new_qty == 0:
                     remove_from_library(entry_id)
                     st.toast("Variant deleted", icon="🗑️")
                 else:
+                    parsed_tags = [t.strip() for t in tag_input.split(",") if t.strip()]
                     update_library_card(entry_id, quantity=new_qty)
-                    st.toast("Quantity updated", icon="✅")
-                st.rerun(scope="app")
-        with c4:
-            if st.button("🗑️", key=f"dlg_del_{entry_id}"):
-                remove_from_library(entry_id)
-                st.toast("Variant deleted", icon="🗑️")
+                    update_card_tags(entry_id, parsed_tags)
+                    st.toast("Updated variant & tags", icon="✅")
                 st.rerun(scope="app")
 
-    st.divider()
+        st.divider()
 
+    # Add a new variant entry
     st.markdown("#### **Add Variant**")
     with st.form(key=f"add_variant_form_{scryfall_id}"):
         fc1, fc2, fc3 = st.columns(3)
@@ -390,7 +408,7 @@ else:
 
         st.divider()
 
-    # --- FRAGMENT: LIBRARY ROW (AGGREGATED WITH POPUP MODAL) ---
+    # --- FRAGMENT: LIBRARY ROW (AGGREGATED WITH POPUP MODAL & TAGS) ---
     @st.fragment
     def render_library_row(group):
         c_preview, c_info, c_details, c_total, c_action = st.columns([0.5, 2.5, 2.5, 1.0, 1.5], vertical_alignment="center")
@@ -413,6 +431,12 @@ else:
                 for entry in entries:
                     update_user_card_metadata(entry["id"], card_name, set_name, img_url)
 
+        # Collect all tags across variants for row preview
+        all_tags = set()
+        for e in entries:
+            if e.get("tags"):
+                all_tags.update(e.get("tags"))
+
         with c_preview:
             if img_url:
                 st.image(img_url, width="stretch")
@@ -426,6 +450,9 @@ else:
                 for e in entries
             ])
             st.caption(variant_str)
+            if all_tags:
+                tags_formatted = " ".join([f"`{t}`" for t in sorted(all_tags)])
+                st.caption(f"🏷️ {tags_formatted}")
 
         with c_total:
             st.markdown(f"<h3 style='text-align: right; margin: 0;'>{total_qty}x Total</h3>", unsafe_allow_html=True)
@@ -485,11 +512,6 @@ else:
     # --- DYNAMICALLY KEYED CONTENT CONTAINER ---
     container_key = f"content_{current_tab}_{active_query}"
 
-    components.html(
-        "<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>",
-        height=0
-    )
-
     with st.container(border=False, key=container_key):
         if current_tab == "🔍 Search":
             if search_query:
@@ -543,10 +565,6 @@ else:
             if st.session_state.lib_page > total_lib_pages:
                 st.session_state.lib_page = total_lib_pages
 
-            # Top Pagination Bar
-            render_pagination_bar("lib_page", st.session_state.lib_page, total_lib_pages, total_lib_items, key_suffix="top")
-            st.divider()
-
             if not paged_library:
                 st.info("No matching cards in your library.")
             else:
@@ -577,10 +595,6 @@ else:
 
             if st.session_state.wish_page > total_wish_pages:
                 st.session_state.wish_page = total_wish_pages
-
-            # Top Pagination Bar
-            render_pagination_bar("wish_page", st.session_state.wish_page, total_wish_pages, total_wish_items, key_suffix="top")
-            st.divider()
 
             if not paged_wishlist:
                 st.info("No matching items in your wishlist.")
