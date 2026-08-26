@@ -89,6 +89,12 @@ if "scryfall_search" not in st.session_state:
 if "card_cache" not in st.session_state:
     st.session_state.card_cache = {}
 
+if "lib_page" not in st.session_state:
+    st.session_state.lib_page = 1
+
+if "wish_page" not in st.session_state:
+    st.session_state.wish_page = 1
+
 def fetch_cached_card(scryfall_id):
     """Retrieve card payload from session memory or query network once."""
     if scryfall_id not in st.session_state.card_cache:
@@ -233,7 +239,8 @@ else:
                     "Filter Library",
                     placeholder="Filter Library by card name or set...",
                     key="library_search_input",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    on_change=lambda: st.session_state.update({"lib_page": 1})
                 ).strip().lower()
             with sort_col:
                 lib_sort_option = st.selectbox(
@@ -247,7 +254,8 @@ else:
                         "Finish (Foil First)"
                     ],
                     key="library_sort_option",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    on_change=lambda: st.session_state.update({"lib_page": 1})
                 )
             active_query = f"{lib_query}_{lib_sort_option}"
 
@@ -258,7 +266,8 @@ else:
                     "Filter Wishlist",
                     placeholder="Filter Wishlist by card name or set...",
                     key="wishlist_search_input",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    on_change=lambda: st.session_state.update({"wish_page": 1})
                 ).strip().lower()
             with sort_col:
                 wish_sort_option = st.selectbox(
@@ -271,7 +280,8 @@ else:
                         "Set Name (A-Z)"
                     ],
                     key="wishlist_sort_option",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    on_change=lambda: st.session_state.update({"wish_page": 1})
                 )
             active_query = f"{wish_query}_{wish_sort_option}"
 
@@ -498,11 +508,51 @@ else:
             elif lib_sort_option == "Finish (Foil First)":
                 filtered_library.sort(key=lambda x: 0 if x[0].get("finish") == "foil" else 1)
 
-            st.caption(f"Showing **{len(filtered_library)}** of **{len(library_cards)}** entries (Sorted by: {lib_sort_option})")
-            if not filtered_library:
+            # Library Pagination Logic
+            lib_page_size = st.selectbox(
+                "Per Page", 
+                options=[25, 50, 100], 
+                index=0, 
+                key="lib_page_size_select",
+                on_change=lambda: st.session_state.update({"lib_page": 1})
+            )
+            total_lib_items = len(filtered_library)
+            total_lib_pages = max(1, (total_lib_items + lib_page_size - 1) // lib_page_size)
+
+            if st.session_state.lib_page > total_lib_pages:
+                st.session_state.lib_page = total_lib_pages
+
+            start_idx = (st.session_state.lib_page - 1) * lib_page_size
+            end_idx = start_idx + lib_page_size
+            paged_library = filtered_library[start_idx:end_idx]
+
+            # Pagination Controls Toolbar
+            p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns([1, 1, 3, 1, 1], vertical_alignment="center")
+            with p_col1:
+                if st.button("⏮️", key="lib_first", disabled=st.session_state.lib_page == 1):
+                    st.session_state.lib_page = 1
+                    st.rerun()
+            with p_col2:
+                if st.button("◀️", key="lib_prev", disabled=st.session_state.lib_page == 1):
+                    st.session_state.lib_page -= 1
+                    st.rerun()
+            with p_col3:
+                st.caption(f"Page **{st.session_state.lib_page}** of **{total_lib_pages}** ({total_lib_items} items total)")
+            with p_col4:
+                if st.button("▶️", key="lib_next", disabled=st.session_state.lib_page == total_lib_pages):
+                    st.session_state.lib_page += 1
+                    st.rerun()
+            with p_col5:
+                if st.button("⏭️", key="lib_last", disabled=st.session_state.lib_page == total_lib_pages):
+                    st.session_state.lib_page = total_lib_pages
+                    st.rerun()
+
+            st.divider()
+
+            if not paged_library:
                 st.info("No matching cards in your library.")
             else:
-                for item, card_data in filtered_library:
+                for item, card_data in paged_library:
                     render_library_row(item, card_data)
 
         elif current_tab == "❤️ Wishlist":
@@ -523,7 +573,6 @@ else:
                 if not wish_query or wish_query in c_name or wish_query in s_name:
                     filtered_wishlist.append((wish_item, card_data))
 
-            # Wishlist Sorting Logic Helper
             def get_wishlist_price(pair):
                 c_data = pair[1]
                 if c_data:
@@ -546,9 +595,49 @@ else:
             elif wish_sort_option == "Set Name (A-Z)":
                 filtered_wishlist.sort(key=lambda x: (x[0].get("set_name") or "").lower())
 
-            st.caption(f"Showing **{len(filtered_wishlist)}** of **{len(wishlist_items)}** items (Sorted by: {wish_sort_option})")
-            if not filtered_wishlist:
+            # Wishlist Pagination Logic
+            wish_page_size = st.selectbox(
+                "Per Page", 
+                options=[25, 50, 100], 
+                index=0, 
+                key="wish_page_size_select",
+                on_change=lambda: st.session_state.update({"wish_page": 1})
+            )
+            total_wish_items = len(filtered_wishlist)
+            total_wish_pages = max(1, (total_wish_items + wish_page_size - 1) // wish_page_size)
+
+            if st.session_state.wish_page > total_wish_pages:
+                st.session_state.wish_page = total_wish_pages
+
+            start_idx = (st.session_state.wish_page - 1) * wish_page_size
+            end_idx = start_idx + wish_page_size
+            paged_wishlist = filtered_wishlist[start_idx:end_idx]
+
+            # Pagination Controls Toolbar
+            wp_col1, wp_col2, wp_col3, wp_col4, wp_col5 = st.columns([1, 1, 3, 1, 1], vertical_alignment="center")
+            with wp_col1:
+                if st.button("⏮️", key="wish_first", disabled=st.session_state.wish_page == 1):
+                    st.session_state.wish_page = 1
+                    st.rerun()
+            with wp_col2:
+                if st.button("◀️", key="wish_prev", disabled=st.session_state.wish_page == 1):
+                    st.session_state.wish_page -= 1
+                    st.rerun()
+            with wp_col3:
+                st.caption(f"Page **{st.session_state.wish_page}** of **{total_wish_pages}** ({total_wish_items} items total)")
+            with wp_col4:
+                if st.button("▶️", key="wish_next", disabled=st.session_state.wish_page == total_wish_pages):
+                    st.session_state.wish_page += 1
+                    st.rerun()
+            with wp_col5:
+                if st.button("⏭️", key="wish_last", disabled=st.session_state.wish_page == total_wish_pages):
+                    st.session_state.wish_page = total_wish_pages
+                    st.rerun()
+
+            st.divider()
+
+            if not paged_wishlist:
                 st.info("No matching items in your wishlist.")
             else:
-                for idx, (wish_item, card_data) in enumerate(filtered_wishlist):
+                for idx, (wish_item, card_data) in enumerate(paged_wishlist):
                     render_wishlist_row(wish_item, card_data, idx)
