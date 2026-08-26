@@ -1,11 +1,10 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import requests
 
 from services.database import (
     get_user_by_username,
-    get_user_library,
-    get_user_wishlist,
+    get_user_library_paginated,
+    get_user_wishlist_paginated,
     add_card_to_library,
     remove_from_library,
     update_library_card,
@@ -140,46 +139,6 @@ if st.session_state.user is None:
 else:
     user = st.session_state.user
 
-    def load_and_backfill_user_data(user_id):
-        library = get_user_library(user_id)
-        wishlist = get_user_wishlist(user_id)
-
-        for item in library:
-            if not item.get("card_name") or not item.get("image_url"):
-                card_data = fetch_cached_card(item["scryfall_id"])
-                if card_data:
-                    c_name = card_data.get("name")
-                    s_name = card_data.get("set_name")
-                    img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
-                    
-                    item["card_name"] = c_name
-                    item["set_name"] = s_name
-                    item["image_url"] = img_url
-                    
-                    update_user_card_metadata(item["id"], c_name, s_name, img_url)
-
-        for item in wishlist:
-            if not item.get("card_name") or not item.get("image_url"):
-                card_data = fetch_cached_card(item["scryfall_id"])
-                if card_data:
-                    c_name = card_data.get("name")
-                    s_name = card_data.get("set_name")
-                    img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
-                    
-                    item["card_name"] = c_name
-                    item["set_name"] = s_name
-                    item["image_url"] = img_url
-                    
-                    update_wishlist_metadata(item["id"], c_name, s_name, img_url)
-
-        st.session_state.user_library = library
-        st.session_state.user_wishlist = wishlist
-
-    if "user_library" not in st.session_state or "user_wishlist" not in st.session_state:
-        load_and_backfill_user_data(user["id"])
-
-    wishlist_ids = [w["scryfall_id"] for w in st.session_state.user_wishlist]
-
     # --- STICKY TOP HEADER CONTAINER ---
     with st.container():
         st.markdown('<div class="sticky-header-marker"></div>', unsafe_allow_html=True)
@@ -298,21 +257,12 @@ else:
 
         st.session_state.card_cache[card_id] = card
 
-        # Dynamically compute owned quantity for real-time UI updates
-        owned_count = sum(
-            item.get("quantity", 0) 
-            for item in st.session_state.get("user_library", []) 
-            if item.get("scryfall_id") == card_id
-        )
-
         with c_preview:
             if img_url:
                 st.image(img_url, width="stretch")
 
         with c_info:
             st.markdown(f"**{c_name}** · `{s_name}`")
-            if owned_count > 0:
-                st.caption(f"📚 **In Library: {owned_count}**")
 
         with c_price:
             st.caption(f"Reg: **${usd}** | Foil: **${usd_foil}**")
@@ -325,7 +275,6 @@ else:
                     float(usd) if usd != "N/A" else None, 
                     card_name=c_name, set_name=s_name, image_url=img_url
                 )
-                st.session_state.user_library = get_user_library(user["id"])
                 st.toast(f"Added {c_name} (Reg)", icon="✅")
                 st.rerun(scope="fragment")
 
@@ -335,34 +284,38 @@ else:
                     float(usd_foil) if usd_foil != "N/A" else None,
                     card_name=c_name, set_name=s_name, image_url=img_url
                 )
-                st.session_state.user_library = get_user_library(user["id"])
                 st.toast(f"Added {c_name} (Foil)", icon="✨")
                 st.rerun(scope="fragment")
 
-            is_in_wishlist = card_id in wishlist_ids
-            wish_label = "❤️" if is_in_wishlist else "🤍"
-            if b3.button(wish_label, key=f"wish_{card_id}_{idx}"):
-                if is_in_wishlist:
-                    remove_from_wishlist(user["id"], card_id)
-                    st.session_state.user_wishlist = get_user_wishlist(user["id"])
-                    st.toast("Removed from Wishlist", icon="🗑️")
-                else:
-                    add_to_wishlist(user["id"], card_id, card_name=c_name, set_name=s_name, image_url=img_url)
-                    st.session_state.user_wishlist = get_user_wishlist(user["id"])
-                    st.toast("Added to Wishlist", icon="❤️")
+            if b3.button("❤️", key=f"wish_{card_id}_{idx}"):
+                add_to_wishlist(user["id"], card_id, card_name=c_name, set_name=s_name, image_url=img_url)
+                st.toast("Added to Wishlist", icon="❤️")
                 st.rerun(scope="fragment")
 
         st.divider()
 
     # --- FRAGMENT: LIBRARY ROW ---
     @st.fragment
-    def render_library_row(item, card_data):
+    def render_library_row(item):
         c_preview, c_info, c_finish, c_qty = st.columns([.4, 3.0, 1.5, 2.2])
         entry_id = item.get("id")
-        
-        card_name = item.get("card_name") or (card_data.get("name") if card_data else "Unknown Card")
-        set_name = item.get("set_name") or (card_data.get("set_name") if card_data else "Unknown Set")
-        img_url = item.get("image_url") or (get_card_image_url(card_data, size="large") if card_data else "")
+        scryfall_id = item.get("scryfall_id")
+
+        card_data = None
+        if not item.get("card_name") or not item.get("image_url"):
+            card_data = fetch_cached_card(scryfall_id)
+            if card_data:
+                c_name = card_data.get("name")
+                s_name = card_data.get("set_name")
+                img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
+                update_user_card_metadata(entry_id, c_name, s_name, img_url)
+                item["card_name"] = c_name
+                item["set_name"] = s_name
+                item["image_url"] = img_url
+
+        card_name = item.get("card_name") or "Unknown Card"
+        set_name = item.get("set_name") or "Unknown Set"
+        img_url = item.get("image_url") or ""
 
         with c_preview:
             if img_url:
@@ -383,7 +336,6 @@ else:
             if q_dec.button("➖", key=f"dec_{entry_id}"):
                 if qty - 1 <= 0:
                     remove_from_library(entry_id)
-                    st.session_state.user_library = get_user_library(user["id"])
                     st.toast("Card removed", icon="🗑️")
                     st.rerun(scope="app")
                 else:
@@ -402,14 +354,25 @@ else:
 
     # --- FRAGMENT: WISHLIST ROW ---
     @st.fragment
-    def render_wishlist_row(wish_item, card_data, idx):
+    def render_wishlist_row(wish_item, idx):
         c_preview, c_info, c_price, c_actions = st.columns([.4, 3.0, 1.5, 2.2])
         scryfall_id = wish_item.get("scryfall_id")
 
-        card_name = wish_item.get("card_name") or (card_data.get("name") if card_data else "Unknown Card")
-        set_name = wish_item.get("set_name") or (card_data.get("set_name") if card_data else "Unknown Set")
+        card_data = fetch_cached_card(scryfall_id)
+        if not wish_item.get("card_name") or not wish_item.get("image_url"):
+            if card_data:
+                c_name = card_data.get("name")
+                s_name = card_data.get("set_name")
+                img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
+                update_wishlist_metadata(wish_item["id"], c_name, s_name, img_url)
+                wish_item["card_name"] = c_name
+                wish_item["set_name"] = s_name
+                wish_item["image_url"] = img_url
+
+        card_name = wish_item.get("card_name") or "Unknown Card"
+        set_name = wish_item.get("set_name") or "Unknown Set"
+        img_url = wish_item.get("image_url") or ""
         usd = card_data.get("prices", {}).get("usd") if card_data else "N/A"
-        img_url = wish_item.get("image_url") or (get_card_image_url(card_data, size="large") if card_data else "")
         tcg_url = card_data.get("purchase_uris", {}).get("tcgplayer") if card_data else None
 
         with c_preview:
@@ -430,7 +393,6 @@ else:
             with b_rem:
                 if st.button("❌ Remove", key=f"rem_w_{scryfall_id}_{idx}", width="stretch"):
                     remove_from_wishlist(user["id"], scryfall_id)
-                    st.session_state.user_wishlist = get_user_wishlist(user["id"])
                     st.toast("Removed from Wishlist", icon="🗑️")
                     st.rerun(scope="app")
 
@@ -439,7 +401,6 @@ else:
     # --- DYNAMICALLY KEYED CONTENT CONTAINER ---
     container_key = f"content_{current_tab}_{active_query}"
 
-    # Reset browser scroll top position whenever active query or tab changes
     components.html(
         "<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>",
         height=0
@@ -477,38 +438,6 @@ else:
                 st.info("Type a card name in the search bar above to query Scryfall.")
 
         elif current_tab == "📚 Library":
-            library_cards = [c for c in st.session_state.user_library if c.get("quantity", 0) > 0]
-            
-            filtered_library = []
-            for item in library_cards:
-                scryfall_id = item.get("scryfall_id")
-                c_name = (item.get("card_name") or "").lower()
-                s_name = (item.get("set_name") or "").lower()
-                
-                card_data = None
-                if not c_name or not s_name:
-                    card_data = fetch_cached_card(scryfall_id)
-                    c_name = (card_data.get("name") if card_data else "").lower()
-                    s_name = (card_data.get("set_name") if card_data else "").lower()
-
-                if not lib_query or lib_query in c_name or lib_query in s_name:
-                    filtered_library.append((item, card_data))
-
-            # Library Sorting Logic
-            if lib_sort_option == "Name (A-Z)":
-                filtered_library.sort(key=lambda x: (x[0].get("card_name") or "").lower())
-            elif lib_sort_option == "Name (Z-A)":
-                filtered_library.sort(key=lambda x: (x[0].get("card_name") or "").lower(), reverse=True)
-            elif lib_sort_option == "Quantity: High to Low":
-                filtered_library.sort(key=lambda x: x[0].get("quantity", 1), reverse=True)
-            elif lib_sort_option == "Quantity: Low to High":
-                filtered_library.sort(key=lambda x: x[0].get("quantity", 1))
-            elif lib_sort_option == "Set Name (A-Z)":
-                filtered_library.sort(key=lambda x: (x[0].get("set_name") or "").lower())
-            elif lib_sort_option == "Finish (Foil First)":
-                filtered_library.sort(key=lambda x: 0 if x[0].get("finish") == "foil" else 1)
-
-            # Library Pagination Logic
             lib_page_size = st.selectbox(
                 "Per Page", 
                 options=[25, 50, 100], 
@@ -516,15 +445,20 @@ else:
                 key="lib_page_size_select",
                 on_change=lambda: st.session_state.update({"lib_page": 1})
             )
-            total_lib_items = len(filtered_library)
+
+            # Server-side pagination query calculation
+            offset = (st.session_state.lib_page - 1) * lib_page_size
+            paged_library, total_lib_items = get_user_library_paginated(
+                user_id=user["id"],
+                limit=lib_page_size,
+                offset=offset,
+                search_query=lib_query if lib_query else None,
+                sort_by=lib_sort_option
+            )
             total_lib_pages = max(1, (total_lib_items + lib_page_size - 1) // lib_page_size)
 
             if st.session_state.lib_page > total_lib_pages:
                 st.session_state.lib_page = total_lib_pages
-
-            start_idx = (st.session_state.lib_page - 1) * lib_page_size
-            end_idx = start_idx + lib_page_size
-            paged_library = filtered_library[start_idx:end_idx]
 
             # Pagination Controls Toolbar
             p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns([1, 1, 3, 1, 1], vertical_alignment="center")
@@ -552,50 +486,10 @@ else:
             if not paged_library:
                 st.info("No matching cards in your library.")
             else:
-                for item, card_data in paged_library:
-                    render_library_row(item, card_data)
+                for item in paged_library:
+                    render_library_row(item)
 
         elif current_tab == "❤️ Wishlist":
-            wishlist_items = st.session_state.user_wishlist
-            
-            filtered_wishlist = []
-            for wish_item in wishlist_items:
-                scryfall_id = wish_item.get("scryfall_id")
-                c_name = (wish_item.get("card_name") or "").lower()
-                s_name = (wish_item.get("set_name") or "").lower()
-                
-                card_data = None
-                if not c_name or not s_name:
-                    card_data = fetch_cached_card(scryfall_id)
-                    c_name = (card_data.get("name") if card_data else "").lower()
-                    s_name = (card_data.get("set_name") if card_data else "").lower()
-
-                if not wish_query or wish_query in c_name or wish_query in s_name:
-                    filtered_wishlist.append((wish_item, card_data))
-
-            def get_wishlist_price(pair):
-                c_data = pair[1]
-                if c_data:
-                    val = c_data.get("prices", {}).get("usd")
-                    try:
-                        return float(val) if val else 0.0
-                    except (ValueError, TypeError):
-                        return 0.0
-                return 0.0
-
-            # Wishlist Sorting Logic
-            if wish_sort_option == "Name (A-Z)":
-                filtered_wishlist.sort(key=lambda x: (x[0].get("card_name") or "").lower())
-            elif wish_sort_option == "Name (Z-A)":
-                filtered_wishlist.sort(key=lambda x: (x[0].get("card_name") or "").lower(), reverse=True)
-            elif wish_sort_option == "Price: Low to High":
-                filtered_wishlist.sort(key=get_wishlist_price)
-            elif wish_sort_option == "Price: High to Low":
-                filtered_wishlist.sort(key=get_wishlist_price, reverse=True)
-            elif wish_sort_option == "Set Name (A-Z)":
-                filtered_wishlist.sort(key=lambda x: (x[0].get("set_name") or "").lower())
-
-            # Wishlist Pagination Logic
             wish_page_size = st.selectbox(
                 "Per Page", 
                 options=[25, 50, 100], 
@@ -603,15 +497,20 @@ else:
                 key="wish_page_size_select",
                 on_change=lambda: st.session_state.update({"wish_page": 1})
             )
-            total_wish_items = len(filtered_wishlist)
+
+            # Server-side pagination query calculation
+            offset = (st.session_state.wish_page - 1) * wish_page_size
+            paged_wishlist, total_wish_items = get_user_wishlist_paginated(
+                user_id=user["id"],
+                limit=wish_page_size,
+                offset=offset,
+                search_query=wish_query if wish_query else None,
+                sort_by=wish_sort_option
+            )
             total_wish_pages = max(1, (total_wish_items + wish_page_size - 1) // wish_page_size)
 
             if st.session_state.wish_page > total_wish_pages:
                 st.session_state.wish_page = total_wish_pages
-
-            start_idx = (st.session_state.wish_page - 1) * wish_page_size
-            end_idx = start_idx + wish_page_size
-            paged_wishlist = filtered_wishlist[start_idx:end_idx]
 
             # Pagination Controls Toolbar
             wp_col1, wp_col2, wp_col3, wp_col4, wp_col5 = st.columns([1, 1, 3, 1, 1], vertical_alignment="center")
@@ -639,5 +538,5 @@ else:
             if not paged_wishlist:
                 st.info("No matching items in your wishlist.")
             else:
-                for idx, (wish_item, card_data) in enumerate(paged_wishlist):
-                    render_wishlist_row(wish_item, card_data, idx)
+                for idx, wish_item in enumerate(paged_wishlist):
+                    render_wishlist_row(wish_item, idx)
