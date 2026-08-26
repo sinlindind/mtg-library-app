@@ -140,6 +140,37 @@ def update_user_card_metadata(entry_id: int, card_name: str, set_name: str, imag
         "image_url": image_url
     }).eq("id", entry_id).execute()
 
+def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)"):
+    """Fetch a single page of library items and the total matching count."""
+    query = "SELECT * FROM user_library WHERE user_id = :user_id AND quantity > 0"
+    params = {"user_id": user_id, "limit": limit, "offset": offset}
+
+    # Optional filtering
+    if search_query:
+        query += " AND (LOWER(card_name) LIKE :q OR LOWER(set_name) LIKE :q)"
+        params["q"] = f"%{search_query.lower()}%"
+
+    # Sorting options
+    if sort_by == "Name (A-Z)":
+        query += " ORDER BY card_name ASC"
+    elif sort_by == "Name (Z-A)":
+        query += " ORDER BY card_name DESC"
+    elif sort_by == "Quantity: High to Low":
+        query += " ORDER BY quantity DESC"
+    elif sort_by == "Quantity: Low to High":
+        query += " ORDER BY quantity ASC"
+
+    # Count Query
+    count_query = f"SELECT COUNT(*) FROM ({query}) AS total"
+    
+    # Apply LIMIT & OFFSET
+    query += " LIMIT :limit OFFSET :offset"
+
+    # Execute queries using your database connection/ORM (e.g., SQLAlchemy/sqlite3)
+    total_count = db.execute(count_query, params).scalar()
+    items = db.execute(query, params).fetchall()
+
+    return items, total_count
 
 # ==========================================
 # Wishlist Functions
