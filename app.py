@@ -261,14 +261,18 @@ if st.session_state.user is None:
 else:
     user = st.session_state.user
 
-    # Handle Top Window Scrolling on Rerun via native DOM HTML injection
+    # Comprehensive DOM scroll reset targeting parent containers & main viewport
     if st.session_state.should_scroll_top:
         st.html(
             """
             <script>
+                const targetDoc = window.top.document;
+                targetDoc.querySelectorAll('div[data-testid="stMainBlockContainer"], section.main, .stApp').forEach(el => {
+                    el.scrollTop = 0;
+                });
                 window.top.scrollTo({top: 0, left: 0, behavior: 'instant'});
-                document.documentElement.scrollTop = 0;
-                document.body.scrollTop = 0;
+                targetDoc.documentElement.scrollTop = 0;
+                targetDoc.body.scrollTop = 0;
             </script>
             """
         )
@@ -315,7 +319,6 @@ else:
 
         # Dedicated Tab-Specific Controls
         selected_tags = []
-        tag_match_mode = "Match Any (OR)"
         
         if current_tab == "🔍 Search":
             search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
@@ -371,16 +374,6 @@ else:
 
             if sorted_tags:
                 with st.expander("🏷️ **Filter by Tags**", expanded=False):
-                    mode_col, _ = st.columns([2, 4])
-                    with mode_col:
-                        tag_match_mode = st.radio(
-                            "Match Mode",
-                            options=["Match Any (OR)", "Match All (AND)"],
-                            horizontal=True,
-                            key="tag_match_mode",
-                            on_change=lambda: st.session_state.update({"lib_page": 1})
-                        )
-
                     tag_cols = st.columns(min(len(sorted_tags), 6))
                     for i, tag in enumerate(sorted_tags):
                         col_idx = i % min(len(sorted_tags), 6)
@@ -388,7 +381,7 @@ else:
                             if st.checkbox(tag, key=f"tag_cb_{tag}", on_change=lambda: st.session_state.update({"lib_page": 1})):
                                 selected_tags.append(tag)
 
-            active_query = f"{lib_query}_{'_'.join(selected_tags)}_{tag_match_mode}_{lib_sort_option}"
+            active_query = f"{lib_query}_{'_'.join(selected_tags)}_{lib_sort_option}"
 
         elif current_tab == "❤️ Wishlist":
             search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
@@ -619,7 +612,7 @@ else:
                 sort_by=lib_sort_option
             )
 
-            # Filter locally if active tag checkboxes are toggled
+            # Filter locally using inclusive OR logic
             if selected_tags and paged_library:
                 filtered = []
                 for group in paged_library:
@@ -628,13 +621,7 @@ else:
                         if entry.get("tags"):
                             group_tags.update(entry.get("tags"))
                     
-                    # Apply match mode logic
-                    if tag_match_mode == "Match All (AND)":
-                        matches = all(tag in group_tags for tag in selected_tags)
-                    else:  # Default to Match Any (OR)
-                        matches = any(tag in group_tags for tag in selected_tags)
-
-                    if matches:
+                    if any(tag in group_tags for tag in selected_tags):
                         filtered.append(group)
                 
                 total_lib_items = len(filtered)
