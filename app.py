@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 
 from services.database import (
     get_user_by_username,
@@ -95,17 +94,6 @@ if "lib_page" not in st.session_state:
 if "wish_page" not in st.session_state:
     st.session_state.wish_page = 1
 
-def scroll_to_content():
-    """Triggers a smooth JavaScript scroll to the card content container top."""
-    components.html("""
-        <script>
-            const el = window.top.document.getElementById('card-list-top');
-            if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        </script>
-    """, height=0)
-
 def fetch_cached_card(scryfall_id):
     """Retrieve card payload from session memory or query network once."""
     if scryfall_id not in st.session_state.card_cache:
@@ -115,30 +103,26 @@ def fetch_cached_card(scryfall_id):
     return st.session_state.card_cache.get(scryfall_id)
 
 def render_pagination_bar(page_key, current_page, total_pages, total_items, key_suffix="bottom"):
-    """Reusable bottom toolbar for page navigation controls with smooth scrolling."""
+    """Reusable bottom toolbar for page navigation controls."""
     p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns([1, 1, 3, 1, 1], vertical_alignment="center")
     
     with p_col1:
         if st.button("⏮️", key=f"{page_key}_first_{key_suffix}", disabled=current_page == 1):
             st.session_state[page_key] = 1
-            scroll_to_content()
             st.rerun()
     with p_col2:
         if st.button("◀️", key=f"{page_key}_prev_{key_suffix}", disabled=current_page == 1):
             st.session_state[page_key] -= 1
-            scroll_to_content()
             st.rerun()
     with p_col3:
         st.caption(f"Page **{current_page}** of **{total_pages}** ({total_items} items total)")
     with p_col4:
         if st.button("▶️", key=f"{page_key}_next_{key_suffix}", disabled=current_page == total_pages):
             st.session_state[page_key] += 1
-            scroll_to_content()
             st.rerun()
     with p_col5:
         if st.button("⏭️", key=f"{page_key}_last_{key_suffix}", disabled=current_page == total_pages):
             st.session_state[page_key] = total_pages
-            scroll_to_content()
             st.rerun()
 
 # --- DIALOG POPUP FOR MANAGING VARIANTS & TAGS ---
@@ -396,9 +380,6 @@ else:
                     on_change=lambda: st.session_state.update({"wish_page": 1})
                 )
             active_query = f"{wish_query}_{wish_sort_option}"
-
-    # Target anchor element directly beneath sticky navigation
-    st.markdown('<div id="card-list-top"></div>', unsafe_allow_html=True)
 
     # --- FRAGMENT: SEARCH ROW ---
     @st.fragment
