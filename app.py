@@ -277,7 +277,7 @@ else:
 
     # --- FRAGMENT: SEARCH ROW ---
     @st.fragment
-    def render_search_row(card, idx):
+    def render_search_row(card, idx, library_counts):
         c_preview, c_info, c_price, c_actions = st.columns([1.8, 3.0, 1.5, 2.2])
         img_url = get_card_image_url(card, size="large") or get_card_image_url(card, size="normal")
         usd = card.get("prices", {}).get("usd") or "N/A"
@@ -287,6 +287,7 @@ else:
         s_name = card.get("set_name")
 
         st.session_state.card_cache[card_id] = card
+        owned_count = library_counts.get(card_id, 0)
 
         with c_preview:
             if img_url:
@@ -294,6 +295,8 @@ else:
 
         with c_info:
             st.markdown(f"**{c_name}** · `{s_name}`")
+            if owned_count > 0:
+                st.caption(f"📚 **In Library: {owned_count}**")
 
         with c_price:
             st.caption(f"Reg: **${usd}** | Foil: **${usd_foil}**")
@@ -308,6 +311,7 @@ else:
                 )
                 st.session_state.user_library = get_user_library(user["id"])
                 st.toast(f"Added {c_name} (Reg)", icon="✅")
+                st.rerun(scope="fragment")
 
             if b2.button("✨ Foil", key=f"add_foil_{card_id}_{idx}"):
                 add_card_to_library(
@@ -317,6 +321,7 @@ else:
                 )
                 st.session_state.user_library = get_user_library(user["id"])
                 st.toast(f"Added {c_name} (Foil)", icon="✨")
+                st.rerun(scope="fragment")
 
             is_in_wishlist = card_id in wishlist_ids
             wish_label = "❤️" if is_in_wishlist else "🤍"
@@ -427,6 +432,14 @@ else:
     with st.container(border=False, key=container_key):
         if current_tab == "🔍 Search":
             if search_query:
+                # Calculate live library counts per scryfall_id
+                library_counts = {}
+                for item in st.session_state.get("user_library", []):
+                    sid = item.get("scryfall_id")
+                    qty = item.get("quantity", 0)
+                    if sid:
+                        library_counts[sid] = library_counts.get(sid, 0) + qty
+
                 results = search_cards(search_query)
 
                 def get_usd_price(card):
@@ -451,7 +464,7 @@ else:
 
                 st.caption(f"Found **{len(results)}** printings for `{search_query}` (Sorted by: {sort_option})")
                 for idx, card in enumerate(results):
-                    render_search_row(card, idx)
+                    render_search_row(card, idx, library_counts)
             else:
                 st.info("Type a card name in the search bar above to query Scryfall.")
 
