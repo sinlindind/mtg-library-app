@@ -94,13 +94,6 @@ if "lib_page" not in st.session_state:
 if "wish_page" not in st.session_state:
     st.session_state.wish_page = 1
 
-if "should_scroll_top" not in st.session_state:
-    st.session_state.should_scroll_top = False
-
-def trigger_scroll_to_top():
-    """Sets a flag to force window scrolling to top on render pass."""
-    st.session_state.should_scroll_top = True
-
 def fetch_cached_card(scryfall_id):
     """Retrieve card payload from session memory or query network once."""
     if scryfall_id not in st.session_state.card_cache:
@@ -116,24 +109,20 @@ def render_pagination_bar(page_key, current_page, total_pages, total_items, key_
     with p_col1:
         if st.button("⏮️", key=f"{page_key}_first_{key_suffix}", disabled=current_page == 1):
             st.session_state[page_key] = 1
-            trigger_scroll_to_top()
             st.rerun()
     with p_col2:
         if st.button("◀️", key=f"{page_key}_prev_{key_suffix}", disabled=current_page == 1):
             st.session_state[page_key] -= 1
-            trigger_scroll_to_top()
             st.rerun()
     with p_col3:
         st.caption(f"Page **{current_page}** of **{total_pages}** ({total_items} items total)")
     with p_col4:
         if st.button("▶️", key=f"{page_key}_next_{key_suffix}", disabled=current_page == total_pages):
             st.session_state[page_key] += 1
-            trigger_scroll_to_top()
             st.rerun()
     with p_col5:
         if st.button("⏭️", key=f"{page_key}_last_{key_suffix}", disabled=current_page == total_pages):
             st.session_state[page_key] = total_pages
-            trigger_scroll_to_top()
             st.rerun()
 
 # --- DIALOG POPUP FOR MANAGING VARIANTS & TAGS ---
@@ -260,23 +249,6 @@ if st.session_state.user is None:
 # --- AUTHENTICATED VIEW (APP DASHBOARD) ---
 else:
     user = st.session_state.user
-
-    # Comprehensive DOM scroll reset targeting parent containers & main viewport
-    if st.session_state.should_scroll_top:
-        st.html(
-            """
-            <script>
-                const targetDoc = window.top.document;
-                targetDoc.querySelectorAll('div[data-testid="stMainBlockContainer"], section.main, .stApp').forEach(el => {
-                    el.scrollTop = 0;
-                });
-                window.top.scrollTo({top: 0, left: 0, behavior: 'instant'});
-                targetDoc.documentElement.scrollTop = 0;
-                targetDoc.body.scrollTop = 0;
-            </script>
-            """
-        )
-        st.session_state.should_scroll_top = False
 
     # Fetch total dataset to populate filter tags & dialog dropdowns
     all_lib_items, _ = get_user_library_paginated(
