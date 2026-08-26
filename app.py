@@ -315,6 +315,8 @@ else:
 
         # Dedicated Tab-Specific Controls
         selected_tags = []
+        tag_match_mode = "Match Any (OR)"
+        
         if current_tab == "🔍 Search":
             search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
             with search_col:
@@ -369,6 +371,16 @@ else:
 
             if sorted_tags:
                 with st.expander("🏷️ **Filter by Tags**", expanded=False):
+                    mode_col, _ = st.columns([2, 4])
+                    with mode_col:
+                        tag_match_mode = st.radio(
+                            "Match Mode",
+                            options=["Match Any (OR)", "Match All (AND)"],
+                            horizontal=True,
+                            key="tag_match_mode",
+                            on_change=lambda: st.session_state.update({"lib_page": 1})
+                        )
+
                     tag_cols = st.columns(min(len(sorted_tags), 6))
                     for i, tag in enumerate(sorted_tags):
                         col_idx = i % min(len(sorted_tags), 6)
@@ -376,7 +388,7 @@ else:
                             if st.checkbox(tag, key=f"tag_cb_{tag}", on_change=lambda: st.session_state.update({"lib_page": 1})):
                                 selected_tags.append(tag)
 
-            active_query = f"{lib_query}_{'_'.join(selected_tags)}_{lib_sort_option}"
+            active_query = f"{lib_query}_{'_'.join(selected_tags)}_{tag_match_mode}_{lib_sort_option}"
 
         elif current_tab == "❤️ Wishlist":
             search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
@@ -615,7 +627,14 @@ else:
                     for entry in group.get("entries", []):
                         if entry.get("tags"):
                             group_tags.update(entry.get("tags"))
-                    if all(tag in group_tags for tag in selected_tags):
+                    
+                    # Apply match mode logic
+                    if tag_match_mode == "Match All (AND)":
+                        matches = all(tag in group_tags for tag in selected_tags)
+                    else:  # Default to Match Any (OR)
+                        matches = any(tag in group_tags for tag in selected_tags)
+
+                    if matches:
                         filtered.append(group)
                 
                 total_lib_items = len(filtered)
