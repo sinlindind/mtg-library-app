@@ -277,7 +277,7 @@ else:
 
     # --- FRAGMENT: SEARCH ROW ---
     @st.fragment
-    def render_search_row(card, idx, library_counts):
+    def render_search_row(card, idx):
         c_preview, c_info, c_price, c_actions = st.columns([1.8, 3.0, 1.5, 2.2])
         img_url = get_card_image_url(card, size="large") or get_card_image_url(card, size="normal")
         usd = card.get("prices", {}).get("usd") or "N/A"
@@ -287,7 +287,13 @@ else:
         s_name = card.get("set_name")
 
         st.session_state.card_cache[card_id] = card
-        owned_count = library_counts.get(card_id, 0)
+
+        # Dynamically compute owned quantity for real-time UI updates
+        owned_count = sum(
+            item.get("quantity", 0) 
+            for item in st.session_state.get("user_library", []) 
+            if item.get("scryfall_id") == card_id
+        )
 
         with c_preview:
             if img_url:
@@ -432,14 +438,6 @@ else:
     with st.container(border=False, key=container_key):
         if current_tab == "🔍 Search":
             if search_query:
-                # Calculate live library counts per scryfall_id
-                library_counts = {}
-                for item in st.session_state.get("user_library", []):
-                    sid = item.get("scryfall_id")
-                    qty = item.get("quantity", 0)
-                    if sid:
-                        library_counts[sid] = library_counts.get(sid, 0) + qty
-
                 results = search_cards(search_query)
 
                 def get_usd_price(card):
@@ -464,7 +462,7 @@ else:
 
                 st.caption(f"Found **{len(results)}** printings for `{search_query}` (Sorted by: {sort_option})")
                 for idx, card in enumerate(results):
-                    render_search_row(card, idx, library_counts)
+                    render_search_row(card, idx)
             else:
                 st.info("Type a card name in the search bar above to query Scryfall.")
 
