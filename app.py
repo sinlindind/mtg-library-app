@@ -178,7 +178,7 @@ def manage_card_inventory_dialog(group, user_id):
             )
         with c3:
             st.write("") # Spacer
-            if st.button("Save Entry", key=f"dlg_save_{entry_id}"):
+            if st.button("💾", key=f"dlg_save_{entry_id}"):
                 if new_qty == 0:
                     remove_from_library(entry_id)
                     st.toast("Variant deleted", icon="🗑️")
