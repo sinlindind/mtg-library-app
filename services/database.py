@@ -54,21 +54,22 @@ def verify_user_email(email: str):
 
 
 # ==========================================
-# User Cards Functions (Simplified)
+# User Cards Functions
 # ==========================================
 
 
 def add_card_to_library(
     user_id: str,
     scryfall_id: str,
-    quantity: int = 1,
+    reg_quantity: int = 0,
+    foil_quantity: int = 0,
     card_name: str = None,
     set_name: str = None,
     image_url: str = None,
 ):
     existing_entry = (
         supabase.table("user_cards")
-        .select("id, quantity")
+        .select("id, reg_quantity, foil_quantity")
         .eq("user_id", user_id)
         .eq("scryfall_id", scryfall_id)
         .execute()
@@ -76,11 +77,12 @@ def add_card_to_library(
 
     if existing_entry.data:
         card_record = existing_entry.data[0]
-        new_quantity = card_record["quantity"] + quantity
+        new_reg = card_record.get("reg_quantity", 0) + reg_quantity
+        new_foil = card_record.get("foil_quantity", 0) + foil_quantity
 
         response = (
             supabase.table("user_cards")
-            .update({"quantity": new_quantity})
+            .update({"reg_quantity": new_reg, "foil_quantity": new_foil})
             .eq("id", card_record["id"])
             .execute()
         )
@@ -88,7 +90,8 @@ def add_card_to_library(
         data = {
             "user_id": user_id,
             "scryfall_id": scryfall_id,
-            "quantity": quantity,
+            "reg_quantity": reg_quantity,
+            "foil_quantity": foil_quantity,
             "card_name": card_name,
             "set_name": set_name,
             "image_url": image_url,
@@ -103,13 +106,19 @@ def get_user_library(user_id: str):
     return response.data if response.data else []
 
 
-def update_library_card(entry_id: str, quantity: int = None):
-    if quantity is None:
+def update_library_card(entry_id: str, reg_quantity: int = None, foil_quantity: int = None):
+    update_data = {}
+    if reg_quantity is not None:
+        update_data["reg_quantity"] = reg_quantity
+    if foil_quantity is not None:
+        update_data["foil_quantity"] = foil_quantity
+
+    if not update_data:
         return None
 
     response = (
         supabase.table("user_cards")
-        .update({"quantity": quantity})
+        .update(update_data)
         .eq("id", entry_id)
         .execute()
     )
@@ -123,7 +132,7 @@ def remove_from_library(entry_id: str):
 
 
 # ==========================================
-# Wishlist Functions (Simplified)
+# Wishlist Functions
 # ==========================================
 
 
@@ -183,7 +192,7 @@ def update_card_tags(entry_id: int, tags: list[str]):
 
 
 # ==========================================
-# Pagination Functions (Name Sorting Only)
+# Pagination Functions
 # ==========================================
 
 
@@ -198,7 +207,7 @@ def get_user_library_paginated(
         supabase.table("user_cards")
         .select("*", count="exact")
         .eq("user_id", user_id)
-        .gt("quantity", 0)
+        .or_("reg_quantity.gt.0,foil_quantity.gt.0")
     )
 
     if search_query:

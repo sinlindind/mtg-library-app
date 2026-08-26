@@ -112,13 +112,18 @@ def manage_card_dialog(item, user_id, all_existing_tags):
     entry_id = item.get("id")
     card_name = item.get("card_name") or "Unknown Card"
     set_name = item.get("set_name") or "Unknown Set"
-    qty = item.get("quantity", 1)
+    reg_qty = item.get("reg_quantity", 0)
+    foil_qty = item.get("foil_quantity", 0)
     current_tags = item.get("tags") or []
 
     str_lit.markdown(f"### **{card_name}**")
     str_lit.caption(f"Set: `{set_name}`")
 
-    new_qty = str_lit.number_input("Quantity", min_value=0, value=int(qty), key=f"dlg_qty_{entry_id}")
+    col_q1, col_q2 = str_lit.columns(2)
+    with col_q1:
+        new_reg_qty = str_lit.number_input("Regular Qty", min_value=0, value=int(reg_qty), key=f"dlg_reg_{entry_id}")
+    with col_q2:
+        new_foil_qty = str_lit.number_input("Foil Qty", min_value=0, value=int(foil_qty), key=f"dlg_foil_{entry_id}")
 
     selected_existing = str_lit.multiselect(
         "Select Existing Tags",
@@ -135,13 +140,13 @@ def manage_card_dialog(item, user_id, all_existing_tags):
     )
 
     if str_lit.button("💾 Save Changes", key=f"dlg_save_{entry_id}"):
-        if new_qty == 0:
+        if new_reg_qty == 0 and new_foil_qty == 0:
             remove_from_library(entry_id)
             str_lit.toast("Card removed from library", icon="🗑️")
         else:
             parsed_new = [t.strip() for t in new_custom_tags.split(",") if t.strip()]
             combined_tags = list(set(selected_existing + parsed_new))
-            update_library_card(entry_id, quantity=new_qty)
+            update_library_card(entry_id, reg_quantity=new_reg_qty, foil_quantity=new_foil_qty)
             update_card_tags(entry_id, combined_tags)
             str_lit.toast("Updated quantity & tags", icon="✅")
         str_lit.rerun(scope="app")
@@ -182,8 +187,12 @@ else:
         if entry.get("tags"):
             existing_tags.update(entry.get("tags"))
         sid = entry.get("scryfall_id")
-        qty = entry.get("quantity", 0)
-        library_qty_map[sid] = library_qty_map.get(sid, 0) + qty
+        reg = entry.get("reg_quantity", 0)
+        foil = entry.get("foil_quantity", 0)
+        if sid not in library_qty_map:
+            library_qty_map[sid] = {"reg": 0, "foil": 0}
+        library_qty_map[sid]["reg"] += reg
+        library_qty_map[sid]["foil"] += foil
 
     sorted_tags = sorted(list(existing_tags))
 
@@ -290,7 +299,7 @@ else:
     # --- FRAGMENT: SEARCH ROW ---
     @str_lit.fragment
     def render_search_row(card, idx, library_qty_map):
-        c_preview, c_info, c_price, c_actions = str_lit.columns([1.8, 3.0, 1.5, 2.2])
+        c_preview, c_info, c_price, c_actions = str_lit.columns([1.5, 3.0, 1.5, 3.0])
         img_url = get_card_image_url(card, size="large") or get_card_image_url(card, size="normal")
         usd = card.get("prices", {}).get("usd") or "N/A"
         usd_foil = card.get("prices", {}).get("usd_foil") or "N/A"
@@ -298,7 +307,9 @@ else:
         c_name = card.get("name")
         s_name = card.get("set_name")
 
-        owned_qty = library_qty_map.get(card_id, 0)
+        owned_dict = library_qty_map.get(card_id, {"reg": 0, "foil": 0})
+        owned_reg = owned_dict["reg"]
+        owned_foil = owned_dict["foil"]
         str_lit.session_state.card_cache[card_id] = card
 
         with c_preview:
@@ -307,8 +318,8 @@ else:
 
         with c_info:
             str_lit.markdown(f"**{c_name}** · `{s_name}`")
-            if owned_qty > 0:
-                str_lit.markdown(f"📦 Library Quantity: **{owned_qty}x**")
+            if owned_reg > 0 or owned_foil > 0:
+                str_lit.markdown(f"📦 Library: **{owned_reg}x** Reg | **{owned_foil}x** Foil")
             else:
                 str_lit.caption("Not in library")
 
@@ -316,20 +327,34 @@ else:
             str_lit.caption(f"Reg: **${usd}** | Foil: **${usd_foil}**")
 
         with c_actions:
-            b1, b2 = str_lit.columns(2)
-            if b1.button("➕ Library", key=f"add_lib_{card_id}_{idx}"):
+            b1, b2, b3 = str_lit.columns(3)
+            if b1.button("➕ Reg", key=f"add_reg_{card_id}_{idx}"):
                 add_card_to_library(
                     user_id=user["id"],
                     scryfall_id=card_id,
-                    quantity=1,
+                    reg_quantity=1,
+                    foil_quantity=0,
                     card_name=c_name,
                     set_name=s_name,
                     image_url=img_url,
                 )
-                str_lit.toast(f"Added {c_name} to Library", icon="✅")
+                str_lit.toast(f"Added {c_name} (Reg) to Library", icon="✅")
                 str_lit.rerun(scope="app")
 
-            if b2.button("❤️ Wishlist", key=f"add_wish_{card_id}_{idx}"):
+            if b2.button("✨ Foil", key=f"add_foil_{card_id}_{idx}"):
+                add_card_to_library(
+                    user_id=user["id"],
+                    scryfall_id=card_id,
+                    reg_quantity=0,
+                    foil_quantity=1,
+                    card_name=c_name,
+                    set_name=s_name,
+                    image_url=img_url,
+                )
+                str_lit.toast(f"Added {c_name} (Foil) to Library", icon="✨")
+                str_lit.rerun(scope="app")
+
+            if b3.button("❤️ Wish", key=f"add_wish_{card_id}_{idx}"):
                 add_to_wishlist(
                     user_id=user["id"],
                     scryfall_id=card_id,
@@ -346,14 +371,15 @@ else:
     @str_lit.fragment
     def render_library_row(item, sorted_tags):
         c_preview, c_info, c_details, c_qty, c_action = str_lit.columns(
-            [0.8, 3.0, 2.0, 1.2, 1.5], vertical_alignment="center"
+            [0.8, 3.0, 2.0, 1.5, 1.5], vertical_alignment="center"
         )
 
         scryfall_id = item["scryfall_id"]
         card_name = item.get("card_name") or "Unknown Card"
         set_name = item.get("set_name") or "Unknown Set"
         img_url = item.get("image_url") or ""
-        total_qty = item.get("quantity", 1)
+        reg_qty = item.get("reg_quantity", 0)
+        foil_qty = item.get("foil_quantity", 0)
         tags = item.get("tags") or []
 
         with c_preview:
@@ -370,7 +396,7 @@ else:
 
         with c_qty:
             str_lit.markdown(
-                f"<h3 style='text-align: right; margin: 0;'>{total_qty}x</h3>",
+                f"<div style='text-align: right;'><b>Reg:</b> {reg_qty}x | <b>Foil:</b> {foil_qty}x</div>",
                 unsafe_allow_html=True,
             )
 
