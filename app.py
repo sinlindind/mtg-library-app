@@ -95,12 +95,12 @@ if "lib_page" not in st.session_state:
 if "wish_page" not in st.session_state:
     st.session_state.wish_page = 1
 
-def scroll_to_top():
-    """Triggers inline script execution to reliably reset scroll top across iframe boundaries."""
-    st.markdown(
-        "<img src=x onerror=\"window.scrollTo({top: 0, behavior: 'instant'}); if(window.parent) window.parent.scrollTo({top: 0, behavior: 'instant'}); this.remove();\">",
-        unsafe_allow_html=True
-    )
+if "should_scroll_top" not in st.session_state:
+    st.session_state.should_scroll_top = False
+
+def trigger_scroll_to_top():
+    """Sets a flag to scroll to top on the subsequent render pass."""
+    st.session_state.should_scroll_top = True
 
 def fetch_cached_card(scryfall_id):
     """Retrieve card payload from session memory or query network once."""
@@ -117,24 +117,24 @@ def render_pagination_bar(page_key, current_page, total_pages, total_items, key_
     with p_col1:
         if st.button("⏮️", key=f"{page_key}_first_{key_suffix}", disabled=current_page == 1):
             st.session_state[page_key] = 1
-            scroll_to_top()
+            trigger_scroll_to_top()
             st.rerun()
     with p_col2:
         if st.button("◀️", key=f"{page_key}_prev_{key_suffix}", disabled=current_page == 1):
             st.session_state[page_key] -= 1
-            scroll_to_top()
+            trigger_scroll_to_top()
             st.rerun()
     with p_col3:
         st.caption(f"Page **{current_page}** of **{total_pages}** ({total_items} items total)")
     with p_col4:
         if st.button("▶️", key=f"{page_key}_next_{key_suffix}", disabled=current_page == total_pages):
             st.session_state[page_key] += 1
-            scroll_to_top()
+            trigger_scroll_to_top()
             st.rerun()
     with p_col5:
         if st.button("⏭️", key=f"{page_key}_last_{key_suffix}", disabled=current_page == total_pages):
             st.session_state[page_key] = total_pages
-            scroll_to_top()
+            trigger_scroll_to_top()
             st.rerun()
 
 # --- DIALOG POPUP FOR MANAGING VARIANTS & TAGS ---
@@ -254,6 +254,20 @@ if st.session_state.user is None:
 else:
     user = st.session_state.user
 
+    # Handle Top Window Scrolling on Rerun
+    if st.session_state.should_scroll_top:
+        components.html(
+            """
+            <script>
+                window.parent.scrollTo({top: 0, left: 0, behavior: 'instant'});
+                window.scrollTo({top: 0, left: 0, behavior: 'instant'});
+            </script>
+            """,
+            height=0,
+            width=0
+        )
+        st.session_state.should_scroll_top = False
+
     # --- STICKY TOP HEADER CONTAINER ---
     with st.container():
         st.markdown('<div class="sticky-header-marker"></div>', unsafe_allow_html=True)
@@ -279,6 +293,7 @@ else:
                 st.rerun()
 
         # Dedicated Tab-Specific Controls
+        selected_tags = []
         if current_tab == "🔍 Search":
             search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
             with search_col:
@@ -307,20 +322,12 @@ else:
             active_query = f"{search_query}_{sort_option}"
 
         elif current_tab == "📚 Library":
-            search_col, tag_col, sort_col = st.columns([2.5, 1.5, 1.5], vertical_alignment="center")
+            search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
             with search_col:
                 lib_query = st.text_input(
                     "Filter Library",
-                    placeholder="Filter by card name or set...",
+                    placeholder="Filter Library by card name or set...",
                     key="library_search_input",
-                    label_visibility="collapsed",
-                    on_change=lambda: st.session_state.update({"lib_page": 1})
-                ).strip().lower()
-            with tag_col:
-                lib_tag_query = st.text_input(
-                    "Filter Tags",
-                    placeholder="Filter by tag...",
-                    key="library_tag_input",
                     label_visibility="collapsed",
                     on_change=lambda: st.session_state.update({"lib_page": 1})
                 ).strip().lower()
@@ -338,7 +345,32 @@ else:
                     label_visibility="collapsed",
                     on_change=lambda: st.session_state.update({"lib_page": 1})
                 )
-            active_query = f"{lib_query}_{lib_tag_query}_{lib_sort_option}"
+
+            # Fetch unfiltered dataset once to extract all unique tags dynamically
+            all_lib_items, _ = get_user_library_paginated(
+                user_id=user["id"],
+                limit=10000,
+                offset=0
+            )
+            
+            existing_tags = set()
+            for group in all_lib_items:
+                for entry in group.get("entries", []):
+                    if entry.get("tags"):
+                        existing_tags.update(entry.get("tags"))
+            
+            sorted_tags = sorted(list(existing_tags))
+
+            if sorted_tags:
+                st.caption("🏷️ **Filter by Tags:**")
+                tag_cols = st.columns(min(len(sorted_tags), 6))
+                for i, tag in enumerate(sorted_tags):
+                    col_idx = i % min(len(sorted_tags), 6)
+                    with tag_cols[col_idx]:
+                        if st.checkbox(tag, key=f"tag_cb_{tag}", on_change=lambda: st.session_state.update({"lib_page": 1})):
+                            selected_tags.append(tag)
+
+            active_query = f"{lib_query}_{'_'.join(selected_tags)}_{lib_sort_option}"
 
         elif current_tab == "❤️ Wishlist":
             search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
@@ -560,29 +592,29 @@ else:
                 on_change=lambda: st.session_state.update({"lib_page": 1})
             )
 
-            offset = (st.session_state.lib_page - 1) * lib_page_size
-            
-            # Fetch library records
+            # Retrieve database library cards
             paged_library, total_lib_items = get_user_library_paginated(
                 user_id=user["id"],
-                limit=lib_page_size,
-                offset=offset,
+                limit=10000 if selected_tags else lib_page_size,
+                offset=0 if selected_tags else (st.session_state.lib_page - 1) * lib_page_size,
                 search_query=lib_query if lib_query else None,
                 sort_by=lib_sort_option
             )
-            
-            # Post-filter by tag query if specified
-            if lib_tag_query and paged_library:
-                filtered_groups = []
+
+            # Filter locally if active tag checkboxes are toggled
+            if selected_tags and paged_library:
+                filtered = []
                 for group in paged_library:
                     group_tags = set()
                     for entry in group.get("entries", []):
                         if entry.get("tags"):
-                            group_tags.update([t.lower() for t in entry.get("tags")])
-                    if any(lib_tag_query in tag for tag in group_tags):
-                        filtered_groups.append(group)
-                paged_library = filtered_groups
-                total_lib_items = len(paged_library)
+                            group_tags.update(entry.get("tags"))
+                    if all(tag in group_tags for tag in selected_tags):
+                        filtered.append(group)
+                
+                total_lib_items = len(filtered)
+                offset = (st.session_state.lib_page - 1) * lib_page_size
+                paged_library = filtered[offset:offset + lib_page_size]
 
             total_lib_pages = max(1, (total_lib_items + lib_page_size - 1) // lib_page_size)
 
