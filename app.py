@@ -102,6 +102,29 @@ def fetch_cached_card(scryfall_id):
             st.session_state.card_cache[scryfall_id] = card
     return st.session_state.card_cache.get(scryfall_id)
 
+def render_pagination_bar(page_key, current_page, total_pages, total_items, key_suffix="top"):
+    """Reusable toolbar for page navigation controls."""
+    p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns([1, 1, 3, 1, 1], vertical_alignment="center")
+    
+    with p_col1:
+        if st.button("⏮️", key=f"{page_key}_first_{key_suffix}", disabled=current_page == 1):
+            st.session_state[page_key] = 1
+            st.rerun()
+    with p_col2:
+        if st.button("◀️", key=f"{page_key}_prev_{key_suffix}", disabled=current_page == 1):
+            st.session_state[page_key] -= 1
+            st.rerun()
+    with p_col3:
+        st.caption(f"Page **{current_page}** of **{total_pages}** ({total_items} items total)")
+    with p_col4:
+        if st.button("▶️", key=f"{page_key}_next_{key_suffix}", disabled=current_page == total_pages):
+            st.session_state[page_key] += 1
+            st.rerun()
+    with p_col5:
+        if st.button("⏭️", key=f"{page_key}_last_{key_suffix}", disabled=current_page == total_pages):
+            st.session_state[page_key] = total_pages
+            st.rerun()
+
 # --- DIALOG POPUP FOR MANAGING VARIANTS ---
 @st.dialog("Manage Card Inventory")
 def manage_card_inventory_dialog(group, user_id):
@@ -117,7 +140,6 @@ def manage_card_inventory_dialog(group, user_id):
 
     st.markdown("#### **Current Copies in Collection**")
     
-    # Render existing finishes & conditions
     for entry in entries:
         entry_id = entry.get("id")
         finish = entry.get("finish", "nonfoil").capitalize()
@@ -152,7 +174,6 @@ def manage_card_inventory_dialog(group, user_id):
 
     st.divider()
 
-    # Add a new variant entry
     st.markdown("#### **Add Variant**")
     with st.form(key=f"add_variant_form_{scryfall_id}"):
         fc1, fc2, fc3 = st.columns(3)
@@ -239,7 +260,7 @@ else:
                 st.session_state.clear()
                 st.rerun()
 
-        # Dedicated Tab-Specific Controls (Search Input + Sort Selectbox) inside Sticky Header
+        # Dedicated Tab-Specific Controls
         if current_tab == "🔍 Search":
             search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
             with search_col:
@@ -383,7 +404,6 @@ else:
         set_name = first_entry.get("set_name") or "Unknown Set"
         img_url = first_entry.get("image_url") or ""
 
-        # Fetch and cache metadata if absent
         if not card_name or not img_url:
             card_data = fetch_cached_card(scryfall_id)
             if card_data:
@@ -401,7 +421,6 @@ else:
             st.markdown(f"**{card_name}** · `{set_name}`")
 
         with c_details:
-            # Clean list of variants without inline buttons
             variant_str = ", ".join([
                 f"{e.get('quantity', 1)}x {e.get('finish', 'nonfoil').capitalize()} ({e.get('condition', 'NM')})"
                 for e in entries
@@ -511,7 +530,6 @@ else:
                 on_change=lambda: st.session_state.update({"lib_page": 1})
             )
 
-            # Pagination query calculation
             offset = (st.session_state.lib_page - 1) * lib_page_size
             paged_library, total_lib_items = get_user_library_paginated(
                 user_id=user["id"],
@@ -525,27 +543,8 @@ else:
             if st.session_state.lib_page > total_lib_pages:
                 st.session_state.lib_page = total_lib_pages
 
-            # Pagination Controls Toolbar
-            p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns([1, 1, 3, 1, 1], vertical_alignment="center")
-            with p_col1:
-                if st.button("⏮️", key="lib_first", disabled=st.session_state.lib_page == 1):
-                    st.session_state.lib_page = 1
-                    st.rerun()
-            with p_col2:
-                if st.button("◀️", key="lib_prev", disabled=st.session_state.lib_page == 1):
-                    st.session_state.lib_page -= 1
-                    st.rerun()
-            with p_col3:
-                st.caption(f"Page **{st.session_state.lib_page}** of **{total_lib_pages}** ({total_lib_items} items total)")
-            with p_col4:
-                if st.button("▶️", key="lib_next", disabled=st.session_state.lib_page == total_lib_pages):
-                    st.session_state.lib_page += 1
-                    st.rerun()
-            with p_col5:
-                if st.button("⏭️", key="lib_last", disabled=st.session_state.lib_page == total_lib_pages):
-                    st.session_state.lib_page = total_lib_pages
-                    st.rerun()
-
+            # Top Pagination Bar
+            render_pagination_bar("lib_page", st.session_state.lib_page, total_lib_pages, total_lib_items, key_suffix="top")
             st.divider()
 
             if not paged_library:
@@ -553,6 +552,9 @@ else:
             else:
                 for group in paged_library:
                     render_library_row(group)
+
+                # Bottom Pagination Bar
+                render_pagination_bar("lib_page", st.session_state.lib_page, total_lib_pages, total_lib_items, key_suffix="bottom")
 
         elif current_tab == "❤️ Wishlist":
             wish_page_size = st.selectbox(
@@ -563,7 +565,6 @@ else:
                 on_change=lambda: st.session_state.update({"wish_page": 1})
             )
 
-            # Pagination query calculation
             offset = (st.session_state.wish_page - 1) * wish_page_size
             paged_wishlist, total_wish_items = get_user_wishlist_paginated(
                 user_id=user["id"],
@@ -577,27 +578,8 @@ else:
             if st.session_state.wish_page > total_wish_pages:
                 st.session_state.wish_page = total_wish_pages
 
-            # Pagination Controls Toolbar
-            wp_col1, wp_col2, wp_col3, wp_col4, wp_col5 = st.columns([1, 1, 3, 1, 1], vertical_alignment="center")
-            with wp_col1:
-                if st.button("⏮️", key="wish_first", disabled=st.session_state.wish_page == 1):
-                    st.session_state.wish_page = 1
-                    st.rerun()
-            with wp_col2:
-                if st.button("◀️", key="wish_prev", disabled=st.session_state.wish_page == 1):
-                    st.session_state.wish_page -= 1
-                    st.rerun()
-            with wp_col3:
-                st.caption(f"Page **{st.session_state.wish_page}** of **{total_wish_pages}** ({total_wish_items} items total)")
-            with wp_col4:
-                if st.button("▶️", key="wish_next", disabled=st.session_state.wish_page == total_wish_pages):
-                    st.session_state.wish_page += 1
-                    st.rerun()
-            with wp_col5:
-                if st.button("⏭️", key="wish_last", disabled=st.session_state.wish_page == total_wish_pages):
-                    st.session_state.wish_page = total_wish_pages
-                    st.rerun()
-
+            # Top Pagination Bar
+            render_pagination_bar("wish_page", st.session_state.wish_page, total_wish_pages, total_wish_items, key_suffix="top")
             st.divider()
 
             if not paged_wishlist:
@@ -605,3 +587,6 @@ else:
             else:
                 for idx, wish_item in enumerate(paged_wishlist):
                     render_wishlist_row(wish_item, idx)
+
+                # Bottom Pagination Bar
+                render_pagination_bar("wish_page", st.session_state.wish_page, total_wish_pages, total_wish_items, key_suffix="bottom")
