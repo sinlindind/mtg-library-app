@@ -95,12 +95,12 @@ if "lib_page" not in st.session_state:
 if "wish_page" not in st.session_state:
     st.session_state.wish_page = 1
 
-if "should_scroll_top" not in st.session_state:
-    st.session_state.should_scroll_top = False
+if "scroll_counter" not in st.session_state:
+    st.session_state.scroll_counter = 0
 
 def trigger_scroll_to_top():
-    """Sets a flag to scroll to top on the subsequent render pass."""
-    st.session_state.should_scroll_top = True
+    """Increments scroll counter to trigger parent window scroll script."""
+    st.session_state.scroll_counter += 1
 
 def fetch_cached_card(scryfall_id):
     """Retrieve card payload from session memory or query network once."""
@@ -254,19 +254,18 @@ if st.session_state.user is None:
 else:
     user = st.session_state.user
 
-    # Handle Top Window Scrolling on Rerun
-    if st.session_state.should_scroll_top:
-        components.html(
-            """
-            <script>
-                window.parent.scrollTo({top: 0, left: 0, behavior: 'instant'});
-                window.scrollTo({top: 0, left: 0, behavior: 'instant'});
-            </script>
-            """,
-            height=0,
-            width=0
-        )
-        st.session_state.should_scroll_top = False
+    # Execute Window Scroll Command via Dynamic Component Injection
+    components.html(
+        f"""
+        <script>
+            window.parent.scrollTo({{top: 0, left: 0, behavior: 'instant'}});
+            window.scrollTo({{top: 0, left: 0, behavior: 'instant'}});
+        </script>
+        <div data-scroll-id="{st.session_state.scroll_counter}"></div>
+        """,
+        height=0,
+        width=0
+    )
 
     # --- STICKY TOP HEADER CONTAINER ---
     with st.container():
@@ -362,13 +361,13 @@ else:
             sorted_tags = sorted(list(existing_tags))
 
             if sorted_tags:
-                st.caption("🏷️ **Filter by Tags:**")
-                tag_cols = st.columns(min(len(sorted_tags), 6))
-                for i, tag in enumerate(sorted_tags):
-                    col_idx = i % min(len(sorted_tags), 6)
-                    with tag_cols[col_idx]:
-                        if st.checkbox(tag, key=f"tag_cb_{tag}", on_change=lambda: st.session_state.update({"lib_page": 1})):
-                            selected_tags.append(tag)
+                with st.expander("🏷️ **Filter by Tags**", expanded=False):
+                    tag_cols = st.columns(min(len(sorted_tags), 6))
+                    for i, tag in enumerate(sorted_tags):
+                        col_idx = i % min(len(sorted_tags), 6)
+                        with tag_cols[col_idx]:
+                            if st.checkbox(tag, key=f"tag_cb_{tag}", on_change=lambda: st.session_state.update({"lib_page": 1})):
+                                selected_tags.append(tag)
 
             active_query = f"{lib_query}_{'_'.join(selected_tags)}_{lib_sort_option}"
 
