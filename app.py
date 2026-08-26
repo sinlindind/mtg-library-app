@@ -248,7 +248,6 @@ if st.session_state.user is None:
                 stored_hash, stored_salt = user_record["password_hash"].split(":")
                 if verify_password(login_password, stored_hash, stored_salt):
                     st.session_state.user = user_record
-                    # Refresh prices on login so sorting operates on current data
                     sync_user_prices_on_login(user_record["id"], fetch_cached_card)
                     st.rerun()
                 else:

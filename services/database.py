@@ -228,13 +228,13 @@ def update_card_tags(entry_id: int, tags: list[str]):
 # ==========================================
 
 def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)", fetch_cached_card_fn=None):
-    """Fetch paginated library items with SQL-level sorting and pagination."""
+    """Fetch paginated library items with SQL-level sorting and pagination[cite: 15]."""
     query = supabase.table("user_cards").select("*", count="exact").eq("user_id", user_id).gt("quantity", 0)
 
     if search_query:
         query = query.or_(f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%")
 
-    # DB-Level Sorting
+    # DB-Level Sorting mapping[cite: 15]
     if sort_by == "Name (A-Z)":
         query = query.order("card_name", desc=False)
     elif sort_by == "Name (Z-A)":
@@ -248,7 +248,7 @@ def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, s
     elif sort_by == "Released: Oldest":
         query = query.order("released_at", desc=False)
 
-    # DB-Level Pagination
+    # DB-Level Pagination[cite: 15]
     response = query.range(offset, offset + limit - 1).execute()
     rows = response.data if response.data else []
     total_count = response.count if response.count is not None else len(rows)
@@ -270,13 +270,13 @@ def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, s
 
 
 def get_user_wishlist_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)", fetch_cached_card_fn=None):
-    """Fetch paginated wishlist items with SQL-level sorting and pagination."""
+    """Fetch paginated wishlist items with SQL-level sorting and pagination[cite: 15]."""
     query = supabase.table("wishlists").select("*", count="exact").eq("user_id", user_id)
 
     if search_query:
         query = query.or_(f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%")
 
-    # DB-Level Sorting
+    # DB-Level Sorting mapping[cite: 15]
     if sort_by == "Name (A-Z)":
         query = query.order("card_name", desc=False)
     elif sort_by == "Name (Z-A)":
@@ -290,7 +290,7 @@ def get_user_wishlist_paginated(user_id, limit=25, offset=0, search_query=None, 
     elif sort_by == "Released: Oldest":
         query = query.order("released_at", desc=False)
 
-    # DB-Level Pagination
+    # DB-Level Pagination[cite: 15]
     response = query.range(offset, offset + limit - 1).execute()
     items = response.data if response.data else []
     total_count = response.count if response.count is not None else len(items)
@@ -298,7 +298,7 @@ def get_user_wishlist_paginated(user_id, limit=25, offset=0, search_query=None, 
     return items, total_count
 
 def sync_user_prices_on_login(user_id: str, fetch_cached_card_fn):
-    """Sync fresh Scryfall prices to library and wishlist entries upon login."""
+    """Sync fresh Scryfall prices to library and wishlist entries upon login[cite: 15]."""
     # 1. Sync Library Prices
     lib_response = supabase.table("user_cards").select("id, scryfall_id, finish").eq("user_id", user_id).execute()
     if lib_response.data:
