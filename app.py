@@ -78,6 +78,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Standardized Sort Options across the whole application
+SORT_OPTIONS = [
+    "Name (A-Z)",
+    "Name (Z-A)",
+    "Price: Low to High",
+    "Price: High to Low",
+    "Released: Newest",
+    "Released: Oldest"
+]
+
 # Initialize Session State
 if "user" not in st.session_state:
     st.session_state.user = None
@@ -133,14 +143,12 @@ def manage_card_inventory_dialog(group, user_id, all_existing_tags):
     first_entry = entries[0]
     card_name = first_entry.get("card_name") or "Unknown Card"
     set_name = first_entry.get("set_name") or "Unknown Set"
-    img_url = first_entry.get("image_url") or ""
 
     st.markdown(f"### **{card_name}**")
     st.caption(f"Set: `{set_name}`")
 
     st.markdown("#### **Current Copies & Tags**")
     
-    # Render existing finishes, conditions, and tags
     for entry in entries:
         entry_id = entry.get("id")
         finish = entry.get("finish", "nonfoil").capitalize()
@@ -157,7 +165,6 @@ def manage_card_inventory_dialog(group, user_id, all_existing_tags):
             key=f"dlg_qty_{entry_id}"
         )
         
-        # Select from existing collection tags
         selected_existing = st.multiselect(
             "Select Existing Tags",
             options=all_existing_tags,
@@ -165,7 +172,6 @@ def manage_card_inventory_dialog(group, user_id, all_existing_tags):
             key=f"dlg_tags_select_{entry_id}"
         )
         
-        # Add brand-new tags manually
         new_custom_tags = st.text_input(
             "Create New Tags (comma-separated)",
             value=", ".join([t for t in current_tags if t not in all_existing_tags]),
@@ -187,7 +193,6 @@ def manage_card_inventory_dialog(group, user_id, all_existing_tags):
 
         st.divider()
 
-    # Add a new variant entry
     st.markdown("#### **Add Variant**")
     with st.form(key=f"add_variant_form_{scryfall_id}"):
         fc1, fc2, fc3 = st.columns(3)
@@ -207,11 +212,10 @@ def manage_card_inventory_dialog(group, user_id, all_existing_tags):
                 condition=new_cond,
                 card_name=card_name,
                 set_name=set_name,
-                image_url=img_url
+                image_url=first_entry.get("image_url") or ""
             )
             st.toast("Variant added successfully!", icon="✅")
             st.rerun(scope="app")
-
 
 # --- UNAUTHENTICATED VIEW (LOGIN) ---
 if st.session_state.user is None:
@@ -250,7 +254,6 @@ if st.session_state.user is None:
 else:
     user = st.session_state.user
 
-    # Fetch total dataset to populate filter tags & dialog dropdowns
     all_lib_items, _ = get_user_library_paginated(
         user_id=user["id"],
         limit=10000,
@@ -289,7 +292,6 @@ else:
                 st.session_state.clear()
                 st.rerun()
 
-        # Dedicated Tab-Specific Controls
         selected_tags = []
         
         if current_tab == "🔍 Search":
@@ -305,14 +307,7 @@ else:
             with sort_col:
                 sort_option = st.selectbox(
                     "Sort Search Results",
-                    options=[
-                        "Name (A-Z)",
-                        "Name (Z-A)",
-                        "Price: Low to High",
-                        "Price: High to Low",
-                        "Released: Newest",
-                        "Released: Oldest"
-                    ],
+                    options=SORT_OPTIONS,
                     key="search_sort_option",
                     label_visibility="collapsed"
                 )
@@ -332,13 +327,7 @@ else:
             with sort_col:
                 lib_sort_option = st.selectbox(
                     "Sort Library",
-                    options=[
-                        "Name (A-Z)",
-                        "Name (Z-A)",
-                        "Quantity: High to Low",
-                        "Quantity: Low to High",
-                        "Set Name (A-Z)"
-                    ],
+                    options=SORT_OPTIONS,
                     key="library_sort_option",
                     label_visibility="collapsed",
                     on_change=lambda: st.session_state.update({"lib_page": 1})
@@ -368,13 +357,7 @@ else:
             with sort_col:
                 wish_sort_option = st.selectbox(
                     "Sort Wishlist",
-                    options=[
-                        "Name (A-Z)",
-                        "Name (Z-A)",
-                        "Price: Low to High",
-                        "Price: High to Low",
-                        "Set Name (A-Z)"
-                    ],
+                    options=SORT_OPTIONS,
                     key="wishlist_sort_option",
                     label_visibility="collapsed",
                     on_change=lambda: st.session_state.update({"wish_page": 1})
@@ -431,7 +414,7 @@ else:
 
         st.divider()
 
-    # --- FRAGMENT: LIBRARY ROW (AGGREGATED WITH POPUP MODAL & TAGS) ---
+    # --- FRAGMENT: LIBRARY ROW ---
     @st.fragment
     def render_library_row(group, sorted_tags):
         c_preview, c_info, c_details, c_total, c_action = st.columns([0.5, 2.5, 2.5, 1.0, 1.5], vertical_alignment="center")
@@ -454,7 +437,6 @@ else:
                 for entry in entries:
                     update_user_card_metadata(entry["id"], card_name, set_name, img_url)
 
-        # Collect all tags across variants for row preview
         all_tags = set()
         for e in entries:
             if e.get("tags"):
@@ -575,16 +557,15 @@ else:
                 on_change=lambda: st.session_state.update({"lib_page": 1})
             )
 
-            # Retrieve library cards
             paged_library, total_lib_items = get_user_library_paginated(
                 user_id=user["id"],
                 limit=10000 if selected_tags else lib_page_size,
                 offset=0 if selected_tags else (st.session_state.lib_page - 1) * lib_page_size,
                 search_query=lib_query if lib_query else None,
-                sort_by=lib_sort_option
+                sort_by=lib_sort_option,
+                fetch_cached_card_fn=fetch_cached_card
             )
 
-            # Filter locally using inclusive OR logic
             if selected_tags and paged_library:
                 filtered = []
                 for group in paged_library:
@@ -611,7 +592,6 @@ else:
                 for group in paged_library:
                     render_library_row(group, sorted_tags)
 
-                # Bottom Pagination Bar
                 render_pagination_bar("lib_page", st.session_state.lib_page, total_lib_pages, total_lib_items, key_suffix="bottom")
 
         elif current_tab == "❤️ Wishlist":
@@ -629,7 +609,8 @@ else:
                 limit=wish_page_size,
                 offset=offset,
                 search_query=wish_query if wish_query else None,
-                sort_by=wish_sort_option
+                sort_by=wish_sort_option,
+                fetch_cached_card_fn=fetch_cached_card
             )
             total_wish_pages = max(1, (total_wish_items + wish_page_size - 1) // wish_page_size)
 
@@ -642,5 +623,4 @@ else:
                 for idx, wish_item in enumerate(paged_wishlist):
                     render_wishlist_row(wish_item, idx)
 
-                # Bottom Pagination Bar
                 render_pagination_bar("wish_page", st.session_state.wish_page, total_wish_pages, total_wish_items, key_suffix="bottom")
