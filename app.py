@@ -327,7 +327,7 @@ else:
                     image_url=img_url,
                 )
                 str_lit.toast(f"Added {c_name} to Library", icon="✅")
-                str_lit.rerun(scope="fragment")
+                str_lit.rerun(scope="app")
 
             if b2.button("❤️ Wishlist", key=f"add_wish_{card_id}_{idx}"):
                 add_to_wishlist(
