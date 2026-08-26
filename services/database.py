@@ -140,37 +140,7 @@ def update_user_card_metadata(entry_id: int, card_name: str, set_name: str, imag
         "image_url": image_url
     }).eq("id", entry_id).execute()
 
-def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)"):
-    """Fetch a single page of library items and the total matching count."""
-    query = "SELECT * FROM user_library WHERE user_id = :user_id AND quantity > 0"
-    params = {"user_id": user_id, "limit": limit, "offset": offset}
 
-    # Optional filtering
-    if search_query:
-        query += " AND (LOWER(card_name) LIKE :q OR LOWER(set_name) LIKE :q)"
-        params["q"] = f"%{search_query.lower()}%"
-
-    # Sorting options
-    if sort_by == "Name (A-Z)":
-        query += " ORDER BY card_name ASC"
-    elif sort_by == "Name (Z-A)":
-        query += " ORDER BY card_name DESC"
-    elif sort_by == "Quantity: High to Low":
-        query += " ORDER BY quantity DESC"
-    elif sort_by == "Quantity: Low to High":
-        query += " ORDER BY quantity ASC"
-
-    # Count Query
-    count_query = f"SELECT COUNT(*) FROM ({query}) AS total"
-    
-    # Apply LIMIT & OFFSET
-    query += " LIMIT :limit OFFSET :offset"
-
-    # Execute queries using your database connection/ORM (e.g., SQLAlchemy/sqlite3)
-    total_count = db.execute(count_query, params).scalar()
-    items = db.execute(query, params).fetchall()
-
-    return items, total_count
 
 # ==========================================
 # Wishlist Functions
@@ -230,3 +200,83 @@ def update_wishlist_metadata(wishlist_id: str, card_name: str, set_name: str, im
 
 def update_card_tags(entry_id: int, tags: list[str]):
     return supabase.table("user_cards").update({"tags": tags}).eq("id", entry_id).execute()
+
+# ==========================================
+# Pagination Functions
+# ==========================================
+
+def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)"):
+    """Fetch paginated library items and total item count for a given user."""
+    conn = get_db_connection()  # Use your existing connection getter
+    cursor = conn.cursor()
+
+    base_query = "FROM user_library WHERE user_id = ? AND quantity > 0"
+    params = [user_id]
+
+    if search_query:
+        base_query += " AND (LOWER(card_name) LIKE ? OR LOWER(set_name) LIKE ?)"
+        params.extend([f"%{search_query.lower()}%", f"%{search_query.lower()}%"])
+
+    # Calculate total matching count before applying LIMIT/OFFSET
+    count_sql = f"SELECT COUNT(*) {base_query}"
+    cursor.execute(count_sql, params)
+    total_count = cursor.fetchone()[0]
+
+    # Apply sorting
+    sort_mapping = {
+        "Name (A-Z)": "ORDER BY card_name ASC",
+        "Name (Z-A)": "ORDER BY card_name DESC",
+        "Quantity: High to Low": "ORDER BY quantity DESC",
+        "Quantity: Low to High": "ORDER BY quantity ASC",
+        "Set Name (A-Z)": "ORDER BY set_name ASC",
+        "Finish (Foil First)": "ORDER BY CASE WHEN finish = 'foil' THEN 0 ELSE 1 END"
+    }
+    order_clause = sort_mapping.get(sort_by, "ORDER BY card_name ASC")
+
+    # Fetch page slice
+    data_sql = f"SELECT * {base_query} {order_clause} LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+    
+    cursor.execute(data_sql, params)
+    items = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    return items, total_count
+
+
+def get_user_wishlist_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)"):
+    """Fetch paginated wishlist items and total item count for a given user."""
+    conn = get_db_connection()  # Use your existing connection getter
+    cursor = conn.cursor()
+
+    base_query = "FROM user_wishlist WHERE user_id = ?"
+    params = [user_id]
+
+    if search_query:
+        base_query += " AND (LOWER(card_name) LIKE ? OR LOWER(set_name) LIKE ?)"
+        params.extend([f"%{search_query.lower()}%", f"%{search_query.lower()}%"])
+
+    # Calculate total count
+    count_sql = f"SELECT COUNT(*) {base_query}"
+    cursor.execute(count_sql, params)
+    total_count = cursor.fetchone()[0]
+
+    # Apply sorting
+    sort_mapping = {
+        "Name (A-Z)": "ORDER BY card_name ASC",
+        "Name (Z-A)": "ORDER BY card_name DESC",
+        "Set Name (A-Z)": "ORDER BY set_name ASC",
+        "Price: Low to High": "ORDER BY price ASC",
+        "Price: High to Low": "ORDER BY price DESC"
+    }
+    order_clause = sort_mapping.get(sort_by, "ORDER BY card_name ASC")
+
+    # Fetch page slice
+    data_sql = f"SELECT * {base_query} {order_clause} LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    cursor.execute(data_sql, params)
+    items = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    return items, total_count
