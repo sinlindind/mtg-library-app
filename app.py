@@ -96,10 +96,10 @@ if "wish_page" not in st.session_state:
     st.session_state.wish_page = 1
 
 def scroll_to_top():
-    """Scrolls parent window top to view top of results when page changes."""
-    components.html(
-        "<script>window.parent.scrollTo({top: 0, behavior: 'instant'});</script>",
-        height=0
+    """Triggers inline script execution to reliably reset scroll top across iframe boundaries."""
+    st.markdown(
+        "<img src=x onerror=\"window.scrollTo({top: 0, behavior: 'instant'}); if(window.parent) window.parent.scrollTo({top: 0, behavior: 'instant'}); this.remove();\">",
+        unsafe_allow_html=True
     )
 
 def fetch_cached_card(scryfall_id):
@@ -307,12 +307,20 @@ else:
             active_query = f"{search_query}_{sort_option}"
 
         elif current_tab == "📚 Library":
-            search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
+            search_col, tag_col, sort_col = st.columns([2.5, 1.5, 1.5], vertical_alignment="center")
             with search_col:
                 lib_query = st.text_input(
                     "Filter Library",
-                    placeholder="Filter Library by card name or set...",
+                    placeholder="Filter by card name or set...",
                     key="library_search_input",
+                    label_visibility="collapsed",
+                    on_change=lambda: st.session_state.update({"lib_page": 1})
+                ).strip().lower()
+            with tag_col:
+                lib_tag_query = st.text_input(
+                    "Filter Tags",
+                    placeholder="Filter by tag...",
+                    key="library_tag_input",
                     label_visibility="collapsed",
                     on_change=lambda: st.session_state.update({"lib_page": 1})
                 ).strip().lower()
@@ -330,7 +338,7 @@ else:
                     label_visibility="collapsed",
                     on_change=lambda: st.session_state.update({"lib_page": 1})
                 )
-            active_query = f"{lib_query}_{lib_sort_option}"
+            active_query = f"{lib_query}_{lib_tag_query}_{lib_sort_option}"
 
         elif current_tab == "❤️ Wishlist":
             search_col, sort_col = st.columns([3.5, 1.5], vertical_alignment="center")
@@ -553,6 +561,8 @@ else:
             )
 
             offset = (st.session_state.lib_page - 1) * lib_page_size
+            
+            # Fetch library records
             paged_library, total_lib_items = get_user_library_paginated(
                 user_id=user["id"],
                 limit=lib_page_size,
@@ -560,6 +570,20 @@ else:
                 search_query=lib_query if lib_query else None,
                 sort_by=lib_sort_option
             )
+            
+            # Post-filter by tag query if specified
+            if lib_tag_query and paged_library:
+                filtered_groups = []
+                for group in paged_library:
+                    group_tags = set()
+                    for entry in group.get("entries", []):
+                        if entry.get("tags"):
+                            group_tags.update([t.lower() for t in entry.get("tags")])
+                    if any(lib_tag_query in tag for tag in group_tags):
+                        filtered_groups.append(group)
+                paged_library = filtered_groups
+                total_lib_items = len(paged_library)
+
             total_lib_pages = max(1, (total_lib_items + lib_page_size - 1) // lib_page_size)
 
             if st.session_state.lib_page > total_lib_pages:
