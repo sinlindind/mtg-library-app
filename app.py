@@ -209,8 +209,7 @@ else:
                         "Name (Z-A)",
                         "Quantity: High to Low",
                         "Quantity: Low to High",
-                        "Set Name (A-Z)",
-                        "Finish (Foil First)"
+                        "Set Name (A-Z)"
                     ],
                     key="library_sort_option",
                     label_visibility="collapsed",
@@ -294,28 +293,29 @@ else:
 
         st.divider()
 
-    # --- FRAGMENT: LIBRARY ROW ---
+    # --- FRAGMENT: LIBRARY ROW (AGGREGATED) ---
     @st.fragment
-    def render_library_row(item):
-        c_preview, c_info, c_finish, c_qty = st.columns([.4, 3.0, 1.5, 2.2])
-        entry_id = item.get("id")
-        scryfall_id = item.get("scryfall_id")
+    def render_library_row(group):
+        c_preview, c_info, c_details, c_total = st.columns([0.5, 2.5, 2.5, 1.0], vertical_alignment="center")
+        
+        scryfall_id = group["scryfall_id"]
+        entries = group["entries"]
+        total_qty = group["total_quantity"]
 
-        card_data = None
-        if not item.get("card_name") or not item.get("image_url"):
+        first_entry = entries[0]
+        card_name = first_entry.get("card_name") or "Unknown Card"
+        set_name = first_entry.get("set_name") or "Unknown Set"
+        img_url = first_entry.get("image_url") or ""
+
+        # Fetch and cache metadata if absent
+        if not card_name or not img_url:
             card_data = fetch_cached_card(scryfall_id)
             if card_data:
-                c_name = card_data.get("name")
-                s_name = card_data.get("set_name")
+                card_name = card_data.get("name")
+                set_name = card_data.get("set_name")
                 img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
-                update_user_card_metadata(entry_id, c_name, s_name, img_url)
-                item["card_name"] = c_name
-                item["set_name"] = s_name
-                item["image_url"] = img_url
-
-        card_name = item.get("card_name") or "Unknown Card"
-        set_name = item.get("set_name") or "Unknown Set"
-        img_url = item.get("image_url") or ""
+                for entry in entries:
+                    update_user_card_metadata(entry["id"], card_name, set_name, img_url)
 
         with c_preview:
             if img_url:
@@ -324,31 +324,34 @@ else:
         with c_info:
             st.markdown(f"**{card_name}** · `{set_name}`")
 
-        with c_finish:
-            finish = item.get("finish", "nonfoil").capitalize()
-            cond = item.get("condition", "NM")
-            st.caption(f"**{finish}** ({cond})")
+        with c_details:
+            for entry in entries:
+                entry_id = entry.get("id")
+                finish = entry.get("finish", "nonfoil").capitalize()
+                cond = entry.get("condition", "NM")
+                qty = entry.get("quantity", 1)
 
-        with c_qty:
-            q_dec, q_val, q_inc = st.columns([1, 1.2, 1], vertical_alignment="center")
-            qty = item.get("quantity", 1)
+                sub_col1, sub_col2 = st.columns([2, 1.5], vertical_alignment="center")
+                with sub_col1:
+                    st.caption(f"**{finish}** ({cond})")
+                with sub_col2:
+                    d_dec, d_val, d_inc = st.columns([1, 1, 1], vertical_alignment="center")
+                    if d_dec.button("➖", key=f"dec_{entry_id}"):
+                        if qty - 1 <= 0:
+                            remove_from_library(entry_id)
+                            st.toast("Variant removed", icon="🗑️")
+                        else:
+                            update_library_card(entry_id, quantity=qty - 1)
+                        st.rerun(scope="app")
 
-            if q_dec.button("➖", key=f"dec_{entry_id}"):
-                if qty - 1 <= 0:
-                    remove_from_library(entry_id)
-                    st.toast("Card removed", icon="🗑️")
-                    st.rerun(scope="app")
-                else:
-                    update_library_card(entry_id, quantity=qty - 1)
-                    item["quantity"] = qty - 1
-                    st.rerun(scope="fragment")
+                    d_val.markdown(f"<p style='text-align: center; margin: 0;'><b>{qty}x</b></p>", unsafe_allow_html=True)
 
-            q_val.markdown(f"<p style='text-align: center; margin: 0;'><b>{qty}x</b></p>", unsafe_allow_html=True)
+                    if d_inc.button("➕", key=f"inc_{entry_id}"):
+                        update_library_card(entry_id, quantity=qty + 1)
+                        st.rerun(scope="app")
 
-            if q_inc.button("➕", key=f"inc_{entry_id}"):
-                update_library_card(entry_id, quantity=qty + 1)
-                item["quantity"] = qty + 1
-                st.rerun(scope="fragment")
+        with c_total:
+            st.markdown(f"<h3 style='text-align: right; margin: 0;'>{total_qty}x Total</h3>", unsafe_allow_html=True)
 
         st.divider()
 
@@ -446,7 +449,7 @@ else:
                 on_change=lambda: st.session_state.update({"lib_page": 1})
             )
 
-            # Server-side pagination query calculation
+            # Pagination query calculation
             offset = (st.session_state.lib_page - 1) * lib_page_size
             paged_library, total_lib_items = get_user_library_paginated(
                 user_id=user["id"],
@@ -486,8 +489,8 @@ else:
             if not paged_library:
                 st.info("No matching cards in your library.")
             else:
-                for item in paged_library:
-                    render_library_row(item)
+                for group in paged_library:
+                    render_library_row(group)
 
         elif current_tab == "❤️ Wishlist":
             wish_page_size = st.selectbox(
@@ -498,7 +501,7 @@ else:
                 on_change=lambda: st.session_state.update({"wish_page": 1})
             )
 
-            # Server-side pagination query calculation
+            # Pagination query calculation
             offset = (st.session_state.wish_page - 1) * wish_page_size
             paged_wishlist, total_wish_items = get_user_wishlist_paginated(
                 user_id=user["id"],

@@ -61,9 +61,7 @@ def add_card_to_library(
     set_name: str = None,
     image_url: str = None
 ):
-    """
-    Adds or updates a card entry in user_cards with denormalized metadata.
-    """
+    """Adds or updates a card entry in user_cards with denormalized metadata."""
     existing_entry = supabase.table("user_cards") \
         .select("id, quantity") \
         .eq("user_id", user_id) \
@@ -104,6 +102,7 @@ def get_user_library(user_id: str):
     response = supabase.table("user_cards").select("*").eq("user_id", user_id).execute()
     return response.data if response.data else []
 
+
 def update_library_card(entry_id: str, quantity: int = None, condition: str = None):
     """Updates quantity and/or condition for a specific card entry in user_cards."""
     update_data = {}
@@ -132,6 +131,7 @@ def remove_from_library(entry_id: str):
     
     return response.data
 
+
 def update_user_card_metadata(entry_id: int, card_name: str, set_name: str, image_url: str):
     """Backfills missing metadata for a specific user_cards record."""
     return supabase.table("user_cards").update({
@@ -139,7 +139,6 @@ def update_user_card_metadata(entry_id: int, card_name: str, set_name: str, imag
         "set_name": set_name,
         "image_url": image_url
     }).eq("id", entry_id).execute()
-
 
 
 # ==========================================
@@ -186,6 +185,7 @@ def get_user_wishlist(user_id: str) -> list[dict]:
     
     return response.data if response.data else []
 
+
 def update_wishlist_metadata(wishlist_id: str, card_name: str, set_name: str, image_url: str):
     """Backfills missing metadata for a specific wishlist record."""
     return supabase.table("wishlists").update({
@@ -194,6 +194,7 @@ def update_wishlist_metadata(wishlist_id: str, card_name: str, set_name: str, im
         "image_url": image_url
     }).eq("id", wishlist_id).execute()
 
+
 # ==========================================
 # Card Tagging Functions
 # ==========================================
@@ -201,43 +202,52 @@ def update_wishlist_metadata(wishlist_id: str, card_name: str, set_name: str, im
 def update_card_tags(entry_id: int, tags: list[str]):
     return supabase.table("user_cards").update({"tags": tags}).eq("id", entry_id).execute()
 
+
 # ==========================================
 # Pagination Functions
 # ==========================================
 
-# ==========================================
-# Pagination Functions (Supabase Native)
-# ==========================================
-
 def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)"):
-    """Fetch paginated library items and total item count for a given user using Supabase."""
-    query = supabase.table("user_cards").select("*", count="exact").eq("user_id", user_id).gt("quantity", 0)
+    """Fetch paginated library items aggregated by scryfall_id."""
+    query = supabase.table("user_cards").select("*").eq("user_id", user_id).gt("quantity", 0)
 
     if search_query:
-        # Filter by card_name or set_name case-insensitively
         query = query.or_(f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%")
 
-    # Apply sorting
+    response = query.execute()
+    all_rows = response.data if response.data else []
+
+    # Group database entries by unique scryfall_id
+    grouped_cards = {}
+    for row in all_rows:
+        sid = row["scryfall_id"]
+        if sid not in grouped_cards:
+            grouped_cards[sid] = {
+                "scryfall_id": sid,
+                "total_quantity": 0,
+                "entries": []
+            }
+        grouped_cards[sid]["entries"].append(row)
+        grouped_cards[sid]["total_quantity"] += row.get("quantity", 1)
+
+    group_list = list(grouped_cards.values())
+
+    # Sort aggregated groups
     if sort_by == "Name (A-Z)":
-        query = query.order("card_name", desc=False)
+        group_list.sort(key=lambda x: (x["entries"][0].get("card_name") or "").lower())
     elif sort_by == "Name (Z-A)":
-        query = query.order("card_name", desc=True)
+        group_list.sort(key=lambda x: (x["entries"][0].get("card_name") or "").lower(), reverse=True)
     elif sort_by == "Quantity: High to Low":
-        query = query.order("quantity", desc=True)
+        group_list.sort(key=lambda x: x["total_quantity"], reverse=True)
     elif sort_by == "Quantity: Low to High":
-        query = query.order("quantity", desc=False)
+        group_list.sort(key=lambda x: x["total_quantity"])
     elif sort_by == "Set Name (A-Z)":
-        query = query.order("set_name", desc=False)
-    elif sort_by == "Finish (Foil First)":
-        query = query.order("finish", desc=False)  # Adjust depending on stored enum values
+        group_list.sort(key=lambda x: (x["entries"][0].get("set_name") or "").lower())
 
-    # Apply Range for Pagination
-    response = query.range(offset, offset + limit - 1).execute()
-    
-    items = response.data if response.data else []
-    total_count = response.count if response.count is not None else len(items)
+    total_count = len(group_list)
+    paged_groups = group_list[offset:offset + limit]
 
-    return items, total_count
+    return paged_groups, total_count
 
 
 def get_user_wishlist_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)"):
