@@ -54,7 +54,9 @@ def add_card_to_library(
     notes: str = None,
     card_name: str = None,
     set_name: str = None,
-    image_url: str = None
+    image_url: str = None,
+    current_price: float = None,
+    released_at: str = None
 ):
     existing_entry = supabase.table("user_cards") \
         .select("id, quantity") \
@@ -84,7 +86,9 @@ def add_card_to_library(
             "notes": notes,
             "card_name": card_name,
             "set_name": set_name,
-            "image_url": image_url
+            "image_url": image_url,
+            "current_price": current_price,
+            "released_at": released_at
         }
         response = supabase.table("user_cards").insert(data).execute()
 
@@ -123,12 +127,25 @@ def remove_from_library(entry_id: str):
     return response.data
 
 
-def update_user_card_metadata(entry_id: int, card_name: str, set_name: str, image_url: str):
-    return supabase.table("user_cards").update({
+def update_user_card_metadata(
+    entry_id: int, 
+    card_name: str, 
+    set_name: str, 
+    image_url: str, 
+    current_price: float = None, 
+    released_at: str = None
+):
+    update_data = {
         "card_name": card_name,
         "set_name": set_name,
         "image_url": image_url
-    }).eq("id", entry_id).execute()
+    }
+    if current_price is not None:
+        update_data["current_price"] = current_price
+    if released_at is not None:
+        update_data["released_at"] = released_at
+
+    return supabase.table("user_cards").update(update_data).eq("id", entry_id).execute()
 
 
 # ==========================================
@@ -140,7 +157,9 @@ def add_to_wishlist(
     scryfall_id: str, 
     card_name: str = None, 
     set_name: str = None, 
-    image_url: str = None
+    image_url: str = None,
+    current_price: float = None,
+    released_at: str = None
 ) -> bool:
     try:
         data = {
@@ -148,7 +167,9 @@ def add_to_wishlist(
             "scryfall_id": scryfall_id,
             "card_name": card_name,
             "set_name": set_name,
-            "image_url": image_url
+            "image_url": image_url,
+            "current_price": current_price,
+            "released_at": released_at
         }
         response = supabase.table("wishlists").insert(data).execute()
         return bool(response.data)
@@ -173,12 +194,25 @@ def get_user_wishlist(user_id: str) -> list[dict]:
     return response.data if response.data else []
 
 
-def update_wishlist_metadata(wishlist_id: str, card_name: str, set_name: str, image_url: str):
-    return supabase.table("wishlists").update({
+def update_wishlist_metadata(
+    wishlist_id: str, 
+    card_name: str, 
+    set_name: str, 
+    image_url: str, 
+    current_price: float = None, 
+    released_at: str = None
+):
+    update_data = {
         "card_name": card_name,
         "set_name": set_name,
         "image_url": image_url
-    }).eq("id", wishlist_id).execute()
+    }
+    if current_price is not None:
+        update_data["current_price"] = current_price
+    if released_at is not None:
+        update_data["released_at"] = released_at
+
+    return supabase.table("wishlists").update(update_data).eq("id", wishlist_id).execute()
 
 
 # ==========================================
@@ -190,21 +224,38 @@ def update_card_tags(entry_id: int, tags: list[str]):
 
 
 # ==========================================
-# Pagination & Standardized Sorting Functions
+# Pagination & Database-Level Sorting Functions
 # ==========================================
 
 def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)", fetch_cached_card_fn=None):
-    """Fetch paginated library items aggregated by scryfall_id with full standardized sorting."""
-    query = supabase.table("user_cards").select("*").eq("user_id", user_id).gt("quantity", 0)
+    """Fetch paginated library items with SQL-level sorting and pagination."""
+    query = supabase.table("user_cards").select("*", count="exact").eq("user_id", user_id).gt("quantity", 0)
 
     if search_query:
         query = query.or_(f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%")
 
-    response = query.execute()
-    all_rows = response.data if response.data else []
+    # DB-Level Sorting
+    if sort_by == "Name (A-Z)":
+        query = query.order("card_name", desc=False)
+    elif sort_by == "Name (Z-A)":
+        query = query.order("card_name", desc=True)
+    elif sort_by == "Price: Low to High":
+        query = query.order("current_price", desc=False)
+    elif sort_by == "Price: High to Low":
+        query = query.order("current_price", desc=True)
+    elif sort_by == "Released: Newest":
+        query = query.order("released_at", desc=True)
+    elif sort_by == "Released: Oldest":
+        query = query.order("released_at", desc=False)
 
+    # DB-Level Pagination
+    response = query.range(offset, offset + limit - 1).execute()
+    rows = response.data if response.data else []
+    total_count = response.count if response.count is not None else len(rows)
+
+    # Group only the paginated slice
     grouped_cards = {}
-    for row in all_rows:
+    for row in rows:
         sid = row["scryfall_id"]
         if sid not in grouped_cards:
             grouped_cards[sid] = {
@@ -215,103 +266,33 @@ def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, s
         grouped_cards[sid]["entries"].append(row)
         grouped_cards[sid]["total_quantity"] += row.get("quantity", 1)
 
-    group_list = list(grouped_cards.values())
-
-    # Helper function for fetching card details when sorting by Price or Release Date
-    def _get_card_details(scryfall_id):
-        if fetch_cached_card_fn:
-            return fetch_cached_card_fn(scryfall_id) or {}
-        return {}
-
-    # Apply Standardized Sorting Logic
-    if sort_by == "Name (A-Z)":
-        group_list.sort(key=lambda x: (x["entries"][0].get("card_name") or "").lower())
-    elif sort_by == "Name (Z-A)":
-        group_list.sort(key=lambda x: (x["entries"][0].get("card_name") or "").lower(), reverse=True)
-    elif sort_by == "Price: Low to High":
-        def get_price(x):
-            c = _get_card_details(x["scryfall_id"])
-            val = c.get("prices", {}).get("usd")
-            try:
-                return float(val) if val else 0.0
-            except (ValueError, TypeError):
-                return 0.0
-        group_list.sort(key=get_price)
-    elif sort_by == "Price: High to Low":
-        def get_price(x):
-            c = _get_card_details(x["scryfall_id"])
-            val = c.get("prices", {}).get("usd")
-            try:
-                return float(val) if val else 0.0
-            except (ValueError, TypeError):
-                return 0.0
-        group_list.sort(key=get_price, reverse=True)
-    elif sort_by == "Released: Newest":
-        group_list.sort(
-            key=lambda x: _get_card_details(x["scryfall_id"]).get("released_at", ""),
-            reverse=True
-        )
-    elif sort_by == "Released: Oldest":
-        group_list.sort(
-            key=lambda x: _get_card_details(x["scryfall_id"]).get("released_at", "")
-        )
-
-    total_count = len(group_list)
-    paged_groups = group_list[offset:offset + limit]
-
-    return paged_groups, total_count
+    return list(grouped_cards.values()), total_count
 
 
 def get_user_wishlist_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)", fetch_cached_card_fn=None):
-    """Fetch paginated wishlist items with full standardized sorting."""
+    """Fetch paginated wishlist items with SQL-level sorting and pagination."""
     query = supabase.table("wishlists").select("*", count="exact").eq("user_id", user_id)
 
     if search_query:
         query = query.or_(f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%")
 
-    response = query.execute()
-    items = response.data if response.data else []
-
-    # Helper function for fetching card details when sorting by Price or Release Date
-    def _get_card_details(scryfall_id):
-        if fetch_cached_card_fn:
-            return fetch_cached_card_fn(scryfall_id) or {}
-        return {}
-
-    # Apply Standardized Sorting Logic
+    # DB-Level Sorting
     if sort_by == "Name (A-Z)":
-        items.sort(key=lambda x: (x.get("card_name") or "").lower())
+        query = query.order("card_name", desc=False)
     elif sort_by == "Name (Z-A)":
-        items.sort(key=lambda x: (x.get("card_name") or "").lower(), reverse=True)
+        query = query.order("card_name", desc=True)
     elif sort_by == "Price: Low to High":
-        def get_price(x):
-            c = _get_card_details(x.get("scryfall_id"))
-            val = c.get("prices", {}).get("usd")
-            try:
-                return float(val) if val else 0.0
-            except (ValueError, TypeError):
-                return 0.0
-        items.sort(key=get_price)
+        query = query.order("current_price", desc=False)
     elif sort_by == "Price: High to Low":
-        def get_price(x):
-            c = _get_card_details(x.get("scryfall_id"))
-            val = c.get("prices", {}).get("usd")
-            try:
-                return float(val) if val else 0.0
-            except (ValueError, TypeError):
-                return 0.0
-        items.sort(key=get_price, reverse=True)
+        query = query.order("current_price", desc=True)
     elif sort_by == "Released: Newest":
-        items.sort(
-            key=lambda x: _get_card_details(x.get("scryfall_id")).get("released_at", ""),
-            reverse=True
-        )
+        query = query.order("released_at", desc=True)
     elif sort_by == "Released: Oldest":
-        items.sort(
-            key=lambda x: _get_card_details(x.get("scryfall_id")).get("released_at", "")
-        )
+        query = query.order("released_at", desc=False)
 
-    total_count = len(items)
-    paged_items = items[offset:offset + limit]
+    # DB-Level Pagination
+    response = query.range(offset, offset + limit - 1).execute()
+    items = response.data if response.data else []
+    total_count = response.count if response.count is not None else len(items)
 
-    return paged_items, total_count
+    return items, total_count
