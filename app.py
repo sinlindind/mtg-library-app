@@ -2,6 +2,8 @@ import streamlit as st
 
 from services.database import (
     get_user_by_username,
+    get_user_library,
+    get_user_wishlist,
     get_user_library_paginated,
     get_user_wishlist_paginated,
     add_card_to_library,
@@ -204,6 +206,15 @@ def manage_card_inventory_dialog(group, user_id, all_existing_tags):
             add_qty = st.number_input("Quantity", min_value=1, value=1, key=f"add_qty_{scryfall_id}")
         
         if st.form_submit_button("➕ Add Entry", width="stretch"):
+            card_data = fetch_cached_card(scryfall_id)
+            price_val = 0.0
+            if card_data:
+                p_str = card_data.get("prices", {}).get("usd_foil" if new_finish == "foil" else "usd")
+                try:
+                    price_val = float(p_str) if p_str else 0.0
+                except (ValueError, TypeError):
+                    price_val = 0.0
+
             add_card_to_library(
                 user_id=user_id,
                 scryfall_id=scryfall_id,
@@ -212,7 +223,9 @@ def manage_card_inventory_dialog(group, user_id, all_existing_tags):
                 condition=new_cond,
                 card_name=card_name,
                 set_name=set_name,
-                image_url=first_entry.get("image_url") or ""
+                image_url=first_entry.get("image_url") or "",
+                current_price=price_val,
+                released_at=card_data.get("released_at") if card_data else None
             )
             st.toast("Variant added successfully!", icon="✅")
             st.rerun(scope="app")
@@ -254,17 +267,12 @@ if st.session_state.user is None:
 else:
     user = st.session_state.user
 
-    all_lib_items, _ = get_user_library_paginated(
-        user_id=user["id"],
-        limit=10000,
-        offset=0
-    )
-    
+    # Fetch all library items to extract tag options
+    all_lib_raw = get_user_library(user["id"])
     existing_tags = set()
-    for group in all_lib_items:
-        for entry in group.get("entries", []):
-            if entry.get("tags"):
-                existing_tags.update(entry.get("tags"))
+    for entry in all_lib_raw:
+        if entry.get("tags"):
+            existing_tags.update(entry.get("tags"))
     
     sorted_tags = sorted(list(existing_tags))
 
@@ -374,6 +382,7 @@ else:
         card_id = card["id"]
         c_name = card.get("name")
         s_name = card.get("set_name")
+        rel_at = card.get("released_at")
 
         st.session_state.card_cache[card_id] = card
 
@@ -390,25 +399,33 @@ else:
         with c_actions:
             b1, b2, b3 = st.columns(3)
             if b1.button("➕ Reg", key=f"add_reg_{card_id}_{idx}"):
+                price_val = float(usd) if usd != "N/A" else 0.0
                 add_card_to_library(
                     user["id"], card_id, "nonfoil", 1, "Near Mint", 
-                    float(usd) if usd != "N/A" else None, 
-                    card_name=c_name, set_name=s_name, image_url=img_url
+                    purchase_price=price_val, 
+                    card_name=c_name, set_name=s_name, image_url=img_url,
+                    current_price=price_val, released_at=rel_at
                 )
                 st.toast(f"Added {c_name} (Reg)", icon="✅")
                 st.rerun(scope="fragment")
 
             if b2.button("✨ Foil", key=f"add_foil_{card_id}_{idx}"):
+                price_val = float(usd_foil) if usd_foil != "N/A" else 0.0
                 add_card_to_library(
                     user["id"], card_id, "foil", 1, "Near Mint", 
-                    float(usd_foil) if usd_foil != "N/A" else None,
-                    card_name=c_name, set_name=s_name, image_url=img_url
+                    purchase_price=price_val,
+                    card_name=c_name, set_name=s_name, image_url=img_url,
+                    current_price=price_val, released_at=rel_at
                 )
                 st.toast(f"Added {c_name} (Foil)", icon="✨")
                 st.rerun(scope="fragment")
 
             if b3.button("❤️", key=f"wish_{card_id}_{idx}"):
-                add_to_wishlist(user["id"], card_id, card_name=c_name, set_name=s_name, image_url=img_url)
+                price_val = float(usd) if usd != "N/A" else 0.0
+                add_to_wishlist(
+                    user["id"], card_id, card_name=c_name, set_name=s_name, image_url=img_url,
+                    current_price=price_val, released_at=rel_at
+                )
                 st.toast("Added to Wishlist", icon="❤️")
                 st.rerun(scope="fragment")
 
@@ -428,14 +445,19 @@ else:
         set_name = first_entry.get("set_name") or "Unknown Set"
         img_url = first_entry.get("image_url") or ""
 
-        if not card_name or not img_url:
-            card_data = fetch_cached_card(scryfall_id)
+        card_data = fetch_cached_card(scryfall_id)
+        if not card_name or not img_url or first_entry.get("current_price") is None:
             if card_data:
                 card_name = card_data.get("name")
                 set_name = card_data.get("set_name")
                 img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
+                price_val = card_data.get("prices", {}).get("usd")
+                try:
+                    p_float = float(price_val) if price_val else 0.0
+                except (ValueError, TypeError):
+                    p_float = 0.0
                 for entry in entries:
-                    update_user_card_metadata(entry["id"], card_name, set_name, img_url)
+                    update_user_card_metadata(entry["id"], card_name, set_name, img_url, current_price=p_float, released_at=card_data.get("released_at"))
 
         all_tags = set()
         for e in entries:
@@ -475,12 +497,17 @@ else:
         scryfall_id = wish_item.get("scryfall_id")
 
         card_data = fetch_cached_card(scryfall_id)
-        if not wish_item.get("card_name") or not wish_item.get("image_url"):
+        if not wish_item.get("card_name") or not wish_item.get("image_url") or wish_item.get("current_price") is None:
             if card_data:
                 c_name = card_data.get("name")
                 s_name = card_data.get("set_name")
                 img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
-                update_wishlist_metadata(wish_item["id"], c_name, s_name, img_url)
+                price_val = card_data.get("prices", {}).get("usd")
+                try:
+                    p_float = float(price_val) if price_val else 0.0
+                except (ValueError, TypeError):
+                    p_float = 0.0
+                update_wishlist_metadata(wish_item["id"], c_name, s_name, img_url, current_price=p_float, released_at=card_data.get("released_at"))
                 wish_item["card_name"] = c_name
                 wish_item["set_name"] = s_name
                 wish_item["image_url"] = img_url
@@ -488,7 +515,7 @@ else:
         card_name = wish_item.get("card_name") or "Unknown Card"
         set_name = wish_item.get("set_name") or "Unknown Set"
         img_url = wish_item.get("image_url") or ""
-        usd = card_data.get("prices", {}).get("usd") if card_data else "N/A"
+        usd = wish_item.get("current_price") or (card_data.get("prices", {}).get("usd") if card_data else "N/A")
         tcg_url = card_data.get("purchase_uris", {}).get("tcgplayer") if card_data else None
 
         with c_preview:
