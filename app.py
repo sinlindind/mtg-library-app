@@ -3,7 +3,6 @@ import streamlit as st
 from services.database import (
     get_user_by_username,
     get_user_library,
-    get_user_wishlist,
     get_user_library_paginated,
     get_user_wishlist_paginated,
     add_card_to_library,
@@ -13,7 +12,8 @@ from services.database import (
     remove_from_wishlist,
     update_user_card_metadata,
     update_wishlist_metadata,
-    update_card_tags
+    update_card_tags,
+    sync_user_prices_on_login
 )
 from services.scryfall import search_cards, get_card_by_id, get_card_image_url
 from utils.auth import verify_password
@@ -242,21 +242,14 @@ if st.session_state.user is None:
             login_password = st.text_input("Password", type="password", key="login_pass")
             login_submitted = st.form_submit_button("Login", width="stretch")
 
-        st.html(
-            """
-            <script>
-              const inputs = window.top.document.querySelectorAll('input[type="text"]');
-              if (inputs.length > 0) { inputs[0].focus(); }
-            </script>
-            """
-        )
-
         if login_submitted:
             user_record = get_user_by_username(login_username)
             if user_record:
                 stored_hash, stored_salt = user_record["password_hash"].split(":")
                 if verify_password(login_password, stored_hash, stored_salt):
                     st.session_state.user = user_record
+                    # Refresh prices on login so sorting operates on current data
+                    sync_user_prices_on_login(user_record["id"], fetch_cached_card)
                     st.rerun()
                 else:
                     st.error("Invalid username or password.")
@@ -267,7 +260,6 @@ if st.session_state.user is None:
 else:
     user = st.session_state.user
 
-    # Fetch all library items to extract tag options
     all_lib_raw = get_user_library(user["id"])
     existing_tags = set()
     for entry in all_lib_raw:
@@ -434,7 +426,7 @@ else:
     # --- FRAGMENT: LIBRARY ROW ---
     @st.fragment
     def render_library_row(group, sorted_tags):
-        c_preview, c_info, c_details, c_total, c_action = st.columns([0.5, 2.5, 2.5, 1.0, 1.5], vertical_alignment="center")
+        c_preview, c_info, c_details, c_price_qty, c_action = st.columns([0.5, 2.5, 2.0, 1.5, 1.5], vertical_alignment="center")
         
         scryfall_id = group["scryfall_id"]
         entries = group["entries"]
@@ -444,20 +436,21 @@ else:
         card_name = first_entry.get("card_name") or "Unknown Card"
         set_name = first_entry.get("set_name") or "Unknown Set"
         img_url = first_entry.get("image_url") or ""
+        unit_price = first_entry.get("current_price")
 
-        card_data = fetch_cached_card(scryfall_id)
-        if not card_name or not img_url or first_entry.get("current_price") is None:
+        if unit_price is None or not card_name or not img_url:
+            card_data = fetch_cached_card(scryfall_id)
             if card_data:
                 card_name = card_data.get("name")
                 set_name = card_data.get("set_name")
                 img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
                 price_val = card_data.get("prices", {}).get("usd")
                 try:
-                    p_float = float(price_val) if price_val else 0.0
+                    unit_price = float(price_val) if price_val else 0.0
                 except (ValueError, TypeError):
-                    p_float = 0.0
+                    unit_price = 0.0
                 for entry in entries:
-                    update_user_card_metadata(entry["id"], card_name, set_name, img_url, current_price=p_float, released_at=card_data.get("released_at"))
+                    update_user_card_metadata(entry["id"], card_name, set_name, img_url, current_price=unit_price, released_at=card_data.get("released_at"))
 
         all_tags = set()
         for e in entries:
@@ -481,7 +474,9 @@ else:
                 tags_formatted = " ".join([f"`{t}`" for t in sorted(all_tags)])
                 st.caption(f"🏷️ {tags_formatted}")
 
-        with c_total:
+        with c_price_qty:
+            price_display = f"${unit_price:.2f}" if unit_price is not None else "N/A"
+            st.markdown(f"<p style='text-align: right; margin: 0;'>Price: <b>{price_display}</b></p>", unsafe_allow_html=True)
             st.markdown(f"<h3 style='text-align: right; margin: 0;'>{total_qty}x Total</h3>", unsafe_allow_html=True)
 
         with c_action:
@@ -493,21 +488,23 @@ else:
     # --- FRAGMENT: WISHLIST ROW ---
     @st.fragment
     def render_wishlist_row(wish_item, idx):
-        c_preview, c_info, c_price, c_actions = st.columns([.4, 3.0, 1.5, 2.2])
+        c_preview, c_info, c_price, c_actions = st.columns([.4, 3.0, 1.5, 2.2], vertical_alignment="center")
         scryfall_id = wish_item.get("scryfall_id")
 
+        unit_price = wish_item.get("current_price")
         card_data = fetch_cached_card(scryfall_id)
-        if not wish_item.get("card_name") or not wish_item.get("image_url") or wish_item.get("current_price") is None:
+
+        if unit_price is None or not wish_item.get("card_name") or not wish_item.get("image_url"):
             if card_data:
                 c_name = card_data.get("name")
                 s_name = card_data.get("set_name")
                 img_url = get_card_image_url(card_data, size="large") or get_card_image_url(card_data, size="normal")
                 price_val = card_data.get("prices", {}).get("usd")
                 try:
-                    p_float = float(price_val) if price_val else 0.0
+                    unit_price = float(price_val) if price_val else 0.0
                 except (ValueError, TypeError):
-                    p_float = 0.0
-                update_wishlist_metadata(wish_item["id"], c_name, s_name, img_url, current_price=p_float, released_at=card_data.get("released_at"))
+                    unit_price = 0.0
+                update_wishlist_metadata(wish_item["id"], c_name, s_name, img_url, current_price=unit_price, released_at=card_data.get("released_at"))
                 wish_item["card_name"] = c_name
                 wish_item["set_name"] = s_name
                 wish_item["image_url"] = img_url
@@ -515,7 +512,6 @@ else:
         card_name = wish_item.get("card_name") or "Unknown Card"
         set_name = wish_item.get("set_name") or "Unknown Set"
         img_url = wish_item.get("image_url") or ""
-        usd = wish_item.get("current_price") or (card_data.get("prices", {}).get("usd") if card_data else "N/A")
         tcg_url = card_data.get("purchase_uris", {}).get("tcgplayer") if card_data else None
 
         with c_preview:
@@ -526,7 +522,8 @@ else:
             st.markdown(f"**{card_name}** · `{set_name}`")
 
         with c_price:
-            st.caption(f"Price: **${usd or 'N/A'}**")
+            price_display = f"${unit_price:.2f}" if unit_price is not None else "N/A"
+            st.markdown(f"Price: **{price_display}**")
 
         with c_actions:
             b_tcg, b_rem = st.columns(2)

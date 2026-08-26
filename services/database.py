@@ -296,3 +296,49 @@ def get_user_wishlist_paginated(user_id, limit=25, offset=0, search_query=None, 
     total_count = response.count if response.count is not None else len(items)
 
     return items, total_count
+
+def sync_user_prices_on_login(user_id: str, fetch_cached_card_fn):
+    """Sync fresh Scryfall prices to library and wishlist entries upon login."""
+    # 1. Sync Library Prices
+    lib_response = supabase.table("user_cards").select("id, scryfall_id, finish").eq("user_id", user_id).execute()
+    if lib_response.data:
+        for row in lib_response.data:
+            card_data = fetch_cached_card_fn(row["scryfall_id"])
+            if card_data:
+                finish = row.get("finish", "nonfoil")
+                price_key = "usd_foil" if finish == "foil" else "usd"
+                raw_price = card_data.get("prices", {}).get(price_key)
+                try:
+                    price_val = float(raw_price) if raw_price else 0.0
+                except (ValueError, TypeError):
+                    price_val = 0.0
+                
+                update_user_card_metadata(
+                    entry_id=row["id"],
+                    card_name=card_data.get("name"),
+                    set_name=card_data.get("set_name"),
+                    image_url=card_data.get("image_uris", {}).get("large", ""),
+                    current_price=price_val,
+                    released_at=card_data.get("released_at")
+                )
+
+    # 2. Sync Wishlist Prices
+    wish_response = supabase.table("wishlists").select("id, scryfall_id").eq("user_id", user_id).execute()
+    if wish_response.data:
+        for row in wish_response.data:
+            card_data = fetch_cached_card_fn(row["scryfall_id"])
+            if card_data:
+                raw_price = card_data.get("prices", {}).get("usd")
+                try:
+                    price_val = float(raw_price) if raw_price else 0.0
+                except (ValueError, TypeError):
+                    price_val = 0.0
+                
+                update_wishlist_metadata(
+                    wishlist_id=row["id"],
+                    card_name=card_data.get("name"),
+                    set_name=card_data.get("set_name"),
+                    image_url=card_data.get("image_uris", {}).get("large", ""),
+                    current_price=price_val,
+                    released_at=card_data.get("released_at")
+                )
