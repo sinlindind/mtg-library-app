@@ -102,6 +102,82 @@ def fetch_cached_card(scryfall_id):
             st.session_state.card_cache[scryfall_id] = card
     return st.session_state.card_cache.get(scryfall_id)
 
+# --- DIALOG POPUP FOR MANAGING VARIANTS ---
+@st.dialog("Manage Card Inventory")
+def manage_card_inventory_dialog(group, user_id):
+    scryfall_id = group["scryfall_id"]
+    entries = group["entries"]
+    first_entry = entries[0]
+    card_name = first_entry.get("card_name") or "Unknown Card"
+    set_name = first_entry.get("set_name") or "Unknown Set"
+    img_url = first_entry.get("image_url") or ""
+
+    st.markdown(f"### **{card_name}**")
+    st.caption(f"Set: `{set_name}`")
+
+    st.markdown("#### **Current Copies in Collection**")
+    
+    # Render existing finishes & conditions
+    for entry in entries:
+        entry_id = entry.get("id")
+        finish = entry.get("finish", "nonfoil").capitalize()
+        cond = entry.get("condition", "NM")
+        qty = entry.get("quantity", 1)
+
+        c1, c2, c3, c4 = st.columns([2, 1.5, 2, 1], vertical_alignment="center")
+        with c1:
+            st.write(f"**{finish}** ({cond})")
+        with c2:
+            new_qty = st.number_input(
+                "Qty", 
+                min_value=0, 
+                value=int(qty), 
+                key=f"dlg_qty_{entry_id}",
+                label_visibility="collapsed"
+            )
+        with c3:
+            if st.button("Save", key=f"dlg_save_{entry_id}"):
+                if new_qty == 0:
+                    remove_from_library(entry_id)
+                    st.toast("Variant deleted", icon="🗑️")
+                else:
+                    update_library_card(entry_id, quantity=new_qty)
+                    st.toast("Quantity updated", icon="✅")
+                st.rerun(scope="app")
+        with c4:
+            if st.button("🗑️", key=f"dlg_del_{entry_id}"):
+                remove_from_library(entry_id)
+                st.toast("Variant deleted", icon="🗑️")
+                st.rerun(scope="app")
+
+    st.divider()
+
+    # Add a new variant entry
+    st.markdown("#### **Add Variant**")
+    with st.form(key=f"add_variant_form_{scryfall_id}"):
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            new_finish = st.selectbox("Finish", options=["nonfoil", "foil", "etched"], key=f"add_fin_{scryfall_id}")
+        with fc2:
+            new_cond = st.selectbox("Condition", options=["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"], key=f"add_cond_{scryfall_id}")
+        with fc3:
+            add_qty = st.number_input("Quantity", min_value=1, value=1, key=f"add_qty_{scryfall_id}")
+        
+        if st.form_submit_button("➕ Add Entry", width="stretch"):
+            add_card_to_library(
+                user_id=user_id,
+                scryfall_id=scryfall_id,
+                finish=new_finish,
+                quantity=add_qty,
+                condition=new_cond,
+                card_name=card_name,
+                set_name=set_name,
+                image_url=img_url
+            )
+            st.toast("Variant added successfully!", icon="✅")
+            st.rerun(scope="app")
+
+
 # --- UNAUTHENTICATED VIEW (LOGIN) ---
 if st.session_state.user is None:
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -293,10 +369,10 @@ else:
 
         st.divider()
 
-    # --- FRAGMENT: LIBRARY ROW (AGGREGATED) ---
+    # --- FRAGMENT: LIBRARY ROW (AGGREGATED WITH POPUP MODAL) ---
     @st.fragment
     def render_library_row(group):
-        c_preview, c_info, c_details, c_total = st.columns([0.5, 2.5, 2.5, 1.0], vertical_alignment="center")
+        c_preview, c_info, c_details, c_total, c_action = st.columns([0.5, 2.5, 2.5, 1.0, 1.5], vertical_alignment="center")
         
         scryfall_id = group["scryfall_id"]
         entries = group["entries"]
@@ -325,33 +401,19 @@ else:
             st.markdown(f"**{card_name}** · `{set_name}`")
 
         with c_details:
-            for entry in entries:
-                entry_id = entry.get("id")
-                finish = entry.get("finish", "nonfoil").capitalize()
-                cond = entry.get("condition", "NM")
-                qty = entry.get("quantity", 1)
-
-                sub_col1, sub_col2 = st.columns([2, 1.5], vertical_alignment="center")
-                with sub_col1:
-                    st.caption(f"**{finish}** ({cond})")
-                with sub_col2:
-                    d_dec, d_val, d_inc = st.columns([1, 1, 1], vertical_alignment="center")
-                    if d_dec.button("➖", key=f"dec_{entry_id}"):
-                        if qty - 1 <= 0:
-                            remove_from_library(entry_id)
-                            st.toast("Variant removed", icon="🗑️")
-                        else:
-                            update_library_card(entry_id, quantity=qty - 1)
-                        st.rerun(scope="app")
-
-                    d_val.markdown(f"<p style='text-align: center; margin: 0;'><b>{qty}x</b></p>", unsafe_allow_html=True)
-
-                    if d_inc.button("➕", key=f"inc_{entry_id}"):
-                        update_library_card(entry_id, quantity=qty + 1)
-                        st.rerun(scope="app")
+            # Clean list of variants without inline buttons
+            variant_str = ", ".join([
+                f"{e.get('quantity', 1)}x {e.get('finish', 'nonfoil').capitalize()} ({e.get('condition', 'NM')})"
+                for e in entries
+            ])
+            st.caption(variant_str)
 
         with c_total:
             st.markdown(f"<h3 style='text-align: right; margin: 0;'>{total_qty}x Total</h3>", unsafe_allow_html=True)
+
+        with c_action:
+            if st.button("⚙️ Manage", key=f"btn_manage_{scryfall_id}", width="stretch"):
+                manage_card_inventory_dialog(group, user["id"])
 
         st.divider()
 
