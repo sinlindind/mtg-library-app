@@ -1,7 +1,6 @@
 import streamlit as st
 from supabase import create_client, Client
 
-# Initialize Supabase client
 @st.cache_resource
 def init_supabase() -> Client:
     url: str = st.secrets["supabase"]["url"]
@@ -15,7 +14,6 @@ supabase = init_supabase()
 # ==========================================
 
 def create_user(username: str, email: str, password_hash: str, salt: str, verification_token: str = None):
-    """Inserts a new user record."""
     data = {
         "username": username,
         "email": email,
@@ -27,19 +25,16 @@ def create_user(username: str, email: str, password_hash: str, salt: str, verifi
 
 
 def get_user_by_username(username: str):
-    """Fetches user record by username."""
     response = supabase.table("users").select("*").eq("username", username).execute()
     return response.data[0] if response.data else None
 
 
 def get_user_by_email(email: str):
-    """Fetches user record by email."""
     response = supabase.table("users").select("*").eq("email", email).execute()
     return response.data[0] if response.data else None
 
 
 def verify_user_email(email: str):
-    """Updates user record status when email is verified."""
     response = supabase.table("users").update({"is_verified": True}).eq("email", email).execute()
     return response.data[0] if response.data else None
 
@@ -61,7 +56,6 @@ def add_card_to_library(
     set_name: str = None,
     image_url: str = None
 ):
-    """Adds or updates a card entry in user_cards with denormalized metadata."""
     existing_entry = supabase.table("user_cards") \
         .select("id, quantity") \
         .eq("user_id", user_id) \
@@ -98,13 +92,11 @@ def add_card_to_library(
 
 
 def get_user_library(user_id: str):
-    """Fetches all items in user_cards for a given user UUID."""
     response = supabase.table("user_cards").select("*").eq("user_id", user_id).execute()
     return response.data if response.data else []
 
 
 def update_library_card(entry_id: str, quantity: int = None, condition: str = None):
-    """Updates quantity and/or condition for a specific card entry in user_cards."""
     update_data = {}
     if quantity is not None:
         update_data["quantity"] = quantity
@@ -123,7 +115,6 @@ def update_library_card(entry_id: str, quantity: int = None, condition: str = No
 
 
 def remove_from_library(entry_id: str):
-    """Deletes a card entry from user_cards by its row ID."""
     response = supabase.table("user_cards") \
         .delete() \
         .eq("id", entry_id) \
@@ -133,7 +124,6 @@ def remove_from_library(entry_id: str):
 
 
 def update_user_card_metadata(entry_id: int, card_name: str, set_name: str, image_url: str):
-    """Backfills missing metadata for a specific user_cards record."""
     return supabase.table("user_cards").update({
         "card_name": card_name,
         "set_name": set_name,
@@ -152,7 +142,6 @@ def add_to_wishlist(
     set_name: str = None, 
     image_url: str = None
 ) -> bool:
-    """Adds a card with metadata to the user's wishlist in Supabase."""
     try:
         data = {
             "user_id": user_id,
@@ -168,7 +157,6 @@ def add_to_wishlist(
 
 
 def remove_from_wishlist(user_id: str, scryfall_id: str) -> None:
-    """Removes a card from the user's wishlist in Supabase."""
     supabase.table("wishlists") \
         .delete() \
         .eq("user_id", user_id) \
@@ -177,7 +165,6 @@ def remove_from_wishlist(user_id: str, scryfall_id: str) -> None:
 
 
 def get_user_wishlist(user_id: str) -> list[dict]:
-    """Returns all rows in the user's wishlist."""
     response = supabase.table("wishlists") \
         .select("*") \
         .eq("user_id", user_id) \
@@ -187,7 +174,6 @@ def get_user_wishlist(user_id: str) -> list[dict]:
 
 
 def update_wishlist_metadata(wishlist_id: str, card_name: str, set_name: str, image_url: str):
-    """Backfills missing metadata for a specific wishlist record."""
     return supabase.table("wishlists").update({
         "card_name": card_name,
         "set_name": set_name,
@@ -204,11 +190,11 @@ def update_card_tags(entry_id: int, tags: list[str]):
 
 
 # ==========================================
-# Pagination Functions
+# Pagination & Standardized Sorting Functions
 # ==========================================
 
-def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)"):
-    """Fetch paginated library items aggregated by scryfall_id."""
+def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)", fetch_cached_card_fn=None):
+    """Fetch paginated library items aggregated by scryfall_id with full standardized sorting."""
     query = supabase.table("user_cards").select("*").eq("user_id", user_id).gt("quantity", 0)
 
     if search_query:
@@ -217,7 +203,6 @@ def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, s
     response = query.execute()
     all_rows = response.data if response.data else []
 
-    # Group database entries by unique scryfall_id
     grouped_cards = {}
     for row in all_rows:
         sid = row["scryfall_id"]
@@ -232,17 +217,44 @@ def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, s
 
     group_list = list(grouped_cards.values())
 
-    # Sort aggregated groups
+    # Helper function for fetching card details when sorting by Price or Release Date
+    def _get_card_details(scryfall_id):
+        if fetch_cached_card_fn:
+            return fetch_cached_card_fn(scryfall_id) or {}
+        return {}
+
+    # Apply Standardized Sorting Logic
     if sort_by == "Name (A-Z)":
         group_list.sort(key=lambda x: (x["entries"][0].get("card_name") or "").lower())
     elif sort_by == "Name (Z-A)":
         group_list.sort(key=lambda x: (x["entries"][0].get("card_name") or "").lower(), reverse=True)
-    elif sort_by == "Quantity: High to Low":
-        group_list.sort(key=lambda x: x["total_quantity"], reverse=True)
-    elif sort_by == "Quantity: Low to High":
-        group_list.sort(key=lambda x: x["total_quantity"])
-    elif sort_by == "Set Name (A-Z)":
-        group_list.sort(key=lambda x: (x["entries"][0].get("set_name") or "").lower())
+    elif sort_by == "Price: Low to High":
+        def get_price(x):
+            c = _get_card_details(x["scryfall_id"])
+            val = c.get("prices", {}).get("usd")
+            try:
+                return float(val) if val else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+        group_list.sort(key=get_price)
+    elif sort_by == "Price: High to Low":
+        def get_price(x):
+            c = _get_card_details(x["scryfall_id"])
+            val = c.get("prices", {}).get("usd")
+            try:
+                return float(val) if val else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+        group_list.sort(key=get_price, reverse=True)
+    elif sort_by == "Released: Newest":
+        group_list.sort(
+            key=lambda x: _get_card_details(x["scryfall_id"]).get("released_at", ""),
+            reverse=True
+        )
+    elif sort_by == "Released: Oldest":
+        group_list.sort(
+            key=lambda x: _get_card_details(x["scryfall_id"]).get("released_at", "")
+        )
 
     total_count = len(group_list)
     paged_groups = group_list[offset:offset + limit]
@@ -250,25 +262,56 @@ def get_user_library_paginated(user_id, limit=25, offset=0, search_query=None, s
     return paged_groups, total_count
 
 
-def get_user_wishlist_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)"):
-    """Fetch paginated wishlist items and total item count for a given user using Supabase."""
+def get_user_wishlist_paginated(user_id, limit=25, offset=0, search_query=None, sort_by="Name (A-Z)", fetch_cached_card_fn=None):
+    """Fetch paginated wishlist items with full standardized sorting."""
     query = supabase.table("wishlists").select("*", count="exact").eq("user_id", user_id)
 
     if search_query:
         query = query.or_(f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%")
 
-    # Apply sorting
-    if sort_by == "Name (A-Z)":
-        query = query.order("card_name", desc=False)
-    elif sort_by == "Name (Z-A)":
-        query = query.order("card_name", desc=True)
-    elif sort_by == "Set Name (A-Z)":
-        query = query.order("set_name", desc=False)
-
-    # Apply Range for Pagination
-    response = query.range(offset, offset + limit - 1).execute()
-
+    response = query.execute()
     items = response.data if response.data else []
-    total_count = response.count if response.count is not None else len(items)
 
-    return items, total_count
+    # Helper function for fetching card details when sorting by Price or Release Date
+    def _get_card_details(scryfall_id):
+        if fetch_cached_card_fn:
+            return fetch_cached_card_fn(scryfall_id) or {}
+        return {}
+
+    # Apply Standardized Sorting Logic
+    if sort_by == "Name (A-Z)":
+        items.sort(key=lambda x: (x.get("card_name") or "").lower())
+    elif sort_by == "Name (Z-A)":
+        items.sort(key=lambda x: (x.get("card_name") or "").lower(), reverse=True)
+    elif sort_by == "Price: Low to High":
+        def get_price(x):
+            c = _get_card_details(x.get("scryfall_id"))
+            val = c.get("prices", {}).get("usd")
+            try:
+                return float(val) if val else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+        items.sort(key=get_price)
+    elif sort_by == "Price: High to Low":
+        def get_price(x):
+            c = _get_card_details(x.get("scryfall_id"))
+            val = c.get("prices", {}).get("usd")
+            try:
+                return float(val) if val else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+        items.sort(key=get_price, reverse=True)
+    elif sort_by == "Released: Newest":
+        items.sort(
+            key=lambda x: _get_card_details(x.get("scryfall_id")).get("released_at", ""),
+            reverse=True
+        )
+    elif sort_by == "Released: Oldest":
+        items.sort(
+            key=lambda x: _get_card_details(x.get("scryfall_id")).get("released_at", "")
+        )
+
+    total_count = len(items)
+    paged_items = items[offset:offset + limit]
+
+    return paged_items, total_count
