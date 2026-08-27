@@ -299,7 +299,7 @@ else:
     # --- FRAGMENT: SEARCH ROW ---
     @str_lit.fragment
     def render_search_row(card, idx, library_qty_map):
-        c_preview, c_info, c_price, c_actions = str_lit.columns([1.5, 3.0, 1.5, 3.0])
+        c_preview, c_info, c_price, c_actions = str_lit.columns([1.8, 3.0, 1.5, 3.0])
         img_url = get_card_image_url(card, size="large") or get_card_image_url(card, size="normal")
         usd = card.get("prices", {}).get("usd") or "N/A"
         usd_foil = card.get("prices", {}).get("usd_foil") or "N/A"
