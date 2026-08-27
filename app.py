@@ -307,6 +307,11 @@ else:
         c_name = card.get("name")
         s_name = card.get("set_name")
 
+        # Check available finishes from Scryfall API data
+        finishes = card.get("finishes", [])
+        has_nonfoil = "nonfoil" in finishes
+        has_foil = "foil" in finishes or "etched" in finishes
+
         owned_dict = library_qty_map.get(card_id, {"reg": 0, "foil": 0})
         owned_reg = owned_dict["reg"]
         owned_foil = owned_dict["foil"]
@@ -324,35 +329,44 @@ else:
                 str_lit.caption("Not in library")
 
         with c_price:
-            str_lit.caption(f"Reg: **${usd}** | Foil: **${usd_foil}**")
+            price_str = []
+            if has_nonfoil:
+                price_str.append(f"Reg: **${usd}**")
+            if has_foil:
+                price_str.append(f"Foil: **${usd_foil}**")
+            str_lit.caption(" | ".join(price_str) if price_str else "N/A")
 
         with c_actions:
+            # Dynamically set up action columns
             b1, b2, b3 = str_lit.columns(3)
-            if b1.button("➕ Reg", key=f"add_reg_{card_id}_{idx}"):
-                add_card_to_library(
-                    user_id=user["id"],
-                    scryfall_id=card_id,
-                    reg_quantity=1,
-                    foil_quantity=0,
-                    card_name=c_name,
-                    set_name=s_name,
-                    image_url=img_url,
-                )
-                str_lit.toast(f"Added {c_name} (Reg) to Library", icon="✅")
-                str_lit.rerun(scope="app")
 
-            if b2.button("✨ Foil", key=f"add_foil_{card_id}_{idx}"):
-                add_card_to_library(
-                    user_id=user["id"],
-                    scryfall_id=card_id,
-                    reg_quantity=0,
-                    foil_quantity=1,
-                    card_name=c_name,
-                    set_name=s_name,
-                    image_url=img_url,
-                )
-                str_lit.toast(f"Added {c_name} (Foil) to Library", icon="✨")
-                str_lit.rerun(scope="app")
+            if has_nonfoil:
+                if b1.button("➕ Reg", key=f"add_reg_{card_id}_{idx}"):
+                    add_card_to_library(
+                        user_id=user["id"],
+                        scryfall_id=card_id,
+                        reg_quantity=1,
+                        foil_quantity=0,
+                        card_name=c_name,
+                        set_name=s_name,
+                        image_url=img_url,
+                    )
+                    str_lit.toast(f"Added {c_name} (Reg) to Library", icon="✅")
+                    str_lit.rerun(scope="app")
+
+            if has_foil:
+                if b2.button("✨ Foil", key=f"add_foil_{card_id}_{idx}"):
+                    add_card_to_library(
+                        user_id=user["id"],
+                        scryfall_id=card_id,
+                        reg_quantity=0,
+                        foil_quantity=1,
+                        card_name=c_name,
+                        set_name=s_name,
+                        image_url=img_url,
+                    )
+                    str_lit.toast(f"Added {c_name} (Foil) to Library", icon="✨")
+                    str_lit.rerun(scope="app")
 
             if b3.button("❤️ Wish", key=f"add_wish_{card_id}_{idx}"):
                 add_to_wishlist(
