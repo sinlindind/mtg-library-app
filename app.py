@@ -4,8 +4,9 @@ from services.database import (
     add_card_to_library,
     add_to_wishlist,
     get_user_by_username,
-    get_user_library,
+    get_user_card_quantities,
     get_user_library_paginated,
+    get_user_tags,
     get_user_wishlist_paginated,
     remove_from_library,
     remove_from_wishlist,
@@ -74,6 +75,12 @@ if "lib_page" not in str_lit.session_state:
 
 if "wish_page" not in str_lit.session_state:
     str_lit.session_state.wish_page = 1
+
+
+def refresh_user_cache(user_id):
+    """Helper to update cached user metadata after mutations."""
+    str_lit.session_state.sorted_tags = get_user_tags(user_id)
+    str_lit.session_state.library_qty_map = get_user_card_quantities(user_id)
 
 
 def fetch_cached_card(scryfall_id):
@@ -149,6 +156,8 @@ def manage_card_dialog(item, user_id, all_existing_tags):
             update_library_card(entry_id, reg_quantity=new_reg_qty, foil_quantity=new_foil_qty)
             update_card_tags(entry_id, combined_tags)
             str_lit.toast("Updated quantity & tags", icon="✅")
+        
+        refresh_user_cache(user_id)
         str_lit.rerun(scope="app")
 
 
@@ -180,21 +189,15 @@ if str_lit.session_state.user is None:
 else:
     user = str_lit.session_state.user
 
-    all_lib_raw = get_user_library(user["id"])
-    existing_tags = set()
-    library_qty_map = {}
-    for entry in all_lib_raw:
-        if entry.get("tags"):
-            existing_tags.update(entry.get("tags"))
-        sid = entry.get("scryfall_id")
-        reg = entry.get("reg_quantity", 0)
-        foil = entry.get("foil_quantity", 0)
-        if sid not in library_qty_map:
-            library_qty_map[sid] = {"reg": 0, "foil": 0}
-        library_qty_map[sid]["reg"] += reg
-        library_qty_map[sid]["foil"] += foil
+    # Fetch light cached data instead of full database dump
+    if "sorted_tags" not in str_lit.session_state:
+        str_lit.session_state.sorted_tags = get_user_tags(user["id"])
 
-    sorted_tags = sorted(list(existing_tags))
+    if "library_qty_map" not in str_lit.session_state:
+        str_lit.session_state.library_qty_map = get_user_card_quantities(user["id"])
+
+    sorted_tags = str_lit.session_state.sorted_tags
+    library_qty_map = str_lit.session_state.library_qty_map
 
     # --- STICKY TOP HEADER CONTAINER ---
     with str_lit.container():
@@ -337,7 +340,6 @@ else:
             str_lit.caption(" | ".join(price_str) if price_str else "N/A")
 
         with c_actions:
-            # Dynamically set up action columns
             b1, b2, b3 = str_lit.columns(3)
 
             if has_nonfoil:
@@ -351,6 +353,7 @@ else:
                         set_name=s_name,
                         image_url=img_url,
                     )
+                    refresh_user_cache(user["id"])
                     str_lit.toast(f"Added {c_name} (Reg) to Library", icon="✅")
                     str_lit.rerun(scope="app")
 
@@ -365,6 +368,7 @@ else:
                         set_name=s_name,
                         image_url=img_url,
                     )
+                    refresh_user_cache(user["id"])
                     str_lit.toast(f"Added {c_name} (Foil) to Library", icon="✨")
                     str_lit.rerun(scope="app")
 
@@ -497,17 +501,12 @@ else:
 
             paged_library, total_lib_items = get_user_library_paginated(
                 user_id=user["id"],
-                limit=10000 if selected_tags else lib_page_size,
-                offset=0 if selected_tags else (str_lit.session_state.lib_page - 1) * lib_page_size,
+                limit=lib_page_size,
+                offset=(str_lit.session_state.lib_page - 1) * lib_page_size,
                 search_query=lib_query if lib_query else None,
+                tags=selected_tags if selected_tags else None,
                 sort_by=lib_sort_option,
             )
-
-            if selected_tags and paged_library:
-                filtered = [item for item in paged_library if any(t in (item.get("tags") or []) for t in selected_tags)]
-                total_lib_items = len(filtered)
-                offset = (str_lit.session_state.lib_page - 1) * lib_page_size
-                paged_library = filtered[offset : offset + lib_page_size]
 
             total_lib_pages = max(1, (total_lib_items + lib_page_size - 1) // lib_page_size)
 
