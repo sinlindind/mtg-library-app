@@ -158,7 +158,7 @@ def manage_card_dialog(item, user_id, all_existing_tags):
             str_lit.toast("Updated quantity & tags", icon="✅")
         
         refresh_user_cache(user_id)
-        str_lit.rerun(scope="app")
+        str_lit.rerun()
 
 
 # --- UNAUTHENTICATED VIEW (LOGIN) ---
@@ -243,7 +243,6 @@ else:
                     label_visibility="collapsed",
                 )
             str_lit.session_state["scryfall_search"] = search_query
-            active_query = f"{search_query}_{sort_option}"
 
         elif current_tab == "📚 Library":
             search_col, sort_col = str_lit.columns([3.5, 1.5], vertical_alignment="center")
@@ -277,8 +276,6 @@ else:
                             ):
                                 selected_tags.append(tag)
 
-            active_query = f"{lib_query}_{'_'.join(selected_tags)}_{lib_sort_option}"
-
         elif current_tab == "❤️ Wishlist":
             search_col, sort_col = str_lit.columns([3.5, 1.5], vertical_alignment="center")
             with search_col:
@@ -297,10 +294,8 @@ else:
                     label_visibility="collapsed",
                     on_change=lambda: str_lit.session_state.update({"wish_page": 1}),
                 )
-            active_query = f"{wish_query}_{wish_sort_option}"
 
-    # --- FRAGMENT: SEARCH ROW ---
-    @str_lit.fragment
+    # --- STANDARD ROW RENDERERS (REMOVED @FRAGMENT TO PREVENT RERUN BREAKAGE) ---
     def render_search_row(card, idx, library_qty_map):
         c_preview, c_info, c_price, c_actions = str_lit.columns([1.8, 3.0, 1.5, 3.0])
         img_url = get_card_image_url(card, size="large") or get_card_image_url(card, size="normal")
@@ -310,7 +305,6 @@ else:
         c_name = card.get("name")
         s_name = card.get("set_name")
 
-        # Check available finishes from Scryfall API data
         finishes = card.get("finishes", [])
         has_nonfoil = "nonfoil" in finishes
         has_foil = "foil" in finishes or "etched" in finishes
@@ -355,7 +349,7 @@ else:
                     )
                     refresh_user_cache(user["id"])
                     str_lit.toast(f"Added {c_name} (Reg) to Library", icon="✅")
-                    str_lit.rerun(scope="app")
+                    str_lit.rerun()
 
             if has_foil:
                 if b2.button("✨ Foil", key=f"add_foil_{card_id}_{idx}"):
@@ -370,7 +364,7 @@ else:
                     )
                     refresh_user_cache(user["id"])
                     str_lit.toast(f"Added {c_name} (Foil) to Library", icon="✨")
-                    str_lit.rerun(scope="app")
+                    str_lit.rerun()
 
             if b3.button("❤️ Wish", key=f"add_wish_{card_id}_{idx}"):
                 add_to_wishlist(
@@ -381,12 +375,10 @@ else:
                     image_url=img_url,
                 )
                 str_lit.toast(f"Added {c_name} to Wishlist", icon="❤️")
-                str_lit.rerun(scope="fragment")
+                str_lit.rerun()
 
         str_lit.divider()
 
-    # --- FRAGMENT: LIBRARY ROW ---
-    @str_lit.fragment
     def render_library_row(item, sorted_tags):
         c_preview, c_info, c_details, c_qty, c_action = str_lit.columns(
             [0.8, 3.0, 2.0, 1.5, 1.5], vertical_alignment="center"
@@ -424,8 +416,6 @@ else:
 
         str_lit.divider()
 
-    # --- FRAGMENT: WISHLIST ROW ---
-    @str_lit.fragment
     def render_wishlist_row(wish_item, idx):
         c_preview, c_info, c_actions = str_lit.columns([0.8, 4.5, 2.2], vertical_alignment="center")
         scryfall_id = wish_item.get("scryfall_id")
@@ -452,113 +442,110 @@ else:
                 if str_lit.button("❌ Remove", key=f"rem_w_{scryfall_id}_{idx}", width="stretch"):
                     remove_from_wishlist(user["id"], scryfall_id)
                     str_lit.toast("Removed from Wishlist", icon="🗑️")
-                    str_lit.rerun(scope="app")
+                    str_lit.rerun()
 
         str_lit.divider()
 
-    # --- DYNAMICALLY KEYED CONTENT CONTAINER ---
-    container_key = f"content_{current_tab}_{active_query}"
+    # --- MAIN VIEW EXECUTION ---
+    if current_tab == "🔍 Search":
+        if search_query:
+            results = search_cards(search_query)
 
-    with str_lit.container(border=False, key=container_key):
-        if current_tab == "🔍 Search":
-            if search_query:
-                results = search_cards(search_query)
+            def get_usd_price(card):
+                val = card.get("prices", {}).get("usd")
+                try:
+                    return float(val) if val else 0.0
+                except (ValueError, TypeError):
+                    return 0.0
 
-                def get_usd_price(card):
-                    val = card.get("prices", {}).get("usd")
-                    try:
-                        return float(val) if val else 0.0
-                    except (ValueError, TypeError):
-                        return 0.0
+            if sort_option == "Name (A-Z)":
+                results = sorted(results, key=lambda c: c.get("name", "").lower())
+            elif sort_option == "Name (Z-A)":
+                results = sorted(results, key=lambda c: c.get("name", "").lower(), reverse=True)
+            elif sort_option == "Price: Low to High":
+                results = sorted(results, key=get_usd_price)
+            elif sort_option == "Price: High to Low":
+                results = sorted(results, key=get_usd_price, reverse=True)
+            elif sort_option == "Released: Newest":
+                results = sorted(results, key=lambda c: c.get("released_at", ""), reverse=True)
+            elif sort_option == "Released: Oldest":
+                results = sorted(results, key=lambda c: c.get("released_at", ""))
 
-                if sort_option == "Name (A-Z)":
-                    results = sorted(results, key=lambda c: c.get("name", "").lower())
-                elif sort_option == "Name (Z-A)":
-                    results = sorted(results, key=lambda c: c.get("name", "").lower(), reverse=True)
-                elif sort_option == "Price: Low to High":
-                    results = sorted(results, key=get_usd_price)
-                elif sort_option == "Price: High to Low":
-                    results = sorted(results, key=get_usd_price, reverse=True)
-                elif sort_option == "Released: Newest":
-                    results = sorted(results, key=lambda c: c.get("released_at", ""), reverse=True)
-                elif sort_option == "Released: Oldest":
-                    results = sorted(results, key=lambda c: c.get("released_at", ""))
+            str_lit.caption(f"Found **{len(results)}** printings for `{search_query}` (Sorted by: {sort_option})")
+            for idx, card in enumerate(results):
+                render_search_row(card, idx, library_qty_map)
+        else:
+            str_lit.info("Type a card name in the search bar above to query Scryfall.")
 
-                str_lit.caption(f"Found **{len(results)}** printings for `{search_query}` (Sorted by: {sort_option})")
-                for idx, card in enumerate(results):
-                    render_search_row(card, idx, library_qty_map)
-            else:
-                str_lit.info("Type a card name in the search bar above to query Scryfall.")
+    elif current_tab == "📚 Library":
+        lib_page_size = str_lit.selectbox(
+            "Per Page",
+            options=[25, 50, 100],
+            index=0,
+            key="lib_page_size_select",
+            on_change=lambda: str_lit.session_state.update({"lib_page": 1}),
+        )
 
-        elif current_tab == "📚 Library":
-            lib_page_size = str_lit.selectbox(
-                "Per Page",
-                options=[25, 50, 100],
-                index=0,
-                key="lib_page_size_select",
-                on_change=lambda: str_lit.session_state.update({"lib_page": 1}),
+        paged_library, total_lib_items = get_user_library_paginated(
+            user_id=user["id"],
+            limit=lib_page_size,
+            offset=(str_lit.session_state.lib_page - 1) * lib_page_size,
+            search_query=lib_query if lib_query else None,
+            tags=selected_tags if selected_tags else None,
+            sort_by=lib_sort_option,
+        )
+
+        total_lib_pages = max(1, (total_lib_items + lib_page_size - 1) // lib_page_size)
+
+        if str_lit.session_state.lib_page > total_lib_pages:
+            str_lit.session_state.lib_page = total_lib_pages
+
+        if not paged_library:
+            str_lit.info("No matching cards in your library.")
+        else:
+            for item in paged_library:
+                render_library_row(item, sorted_tags)
+
+            render_pagination_bar(
+                "lib_page",
+                str_lit.session_state.lib_page,
+                total_lib_pages,
+                total_lib_items,
+                key_suffix="bottom",
             )
 
-            paged_library, total_lib_items = get_user_library_paginated(
-                user_id=user["id"],
-                limit=lib_page_size,
-                offset=(str_lit.session_state.lib_page - 1) * lib_page_size,
-                search_query=lib_query if lib_query else None,
-                tags=selected_tags if selected_tags else None,
-                sort_by=lib_sort_option,
+    elif current_tab == "❤️ Wishlist":
+        wish_page_size = str_lit.selectbox(
+            "Per Page",
+            options=[25, 50, 100],
+            index=0,
+            key="wish_page_size_select",
+            on_change=lambda: str_lit.session_state.update({"wish_page": 1}),
+        )
+
+        offset = (str_lit.session_state.wish_page - 1) * wish_page_size
+        paged_wishlist, total_wish_items = get_user_wishlist_paginated(
+            user_id=user["id"],
+            limit=wish_page_size,
+            offset=offset,
+            search_query=wish_query if wish_query else None,
+            sort_by=wish_sort_option,
+        )
+        total_wish_pages = max(1, (total_wish_items + wish_page_size - 1) // wish_page_size)
+
+        if str_lit.session_state.wish_page > total_wish_pages:
+            str_lit.session_state.wish_page = total_wish_pages
+
+        if not paged_wishlist:
+            str_lit.info("No matching items in your wishlist.")
+        else:
+            for idx, wish_item in enumerate(paged_wishlist):
+                render_wishlist_row(wish_item, idx)
+
+            render_pagination_bar(
+                "wish_page",
+                str_lit.session_state.wish_page,
+                total_wish_pages,
+                total_wish_items,
+                key_suffix="bottom",
             )
-
-            total_lib_pages = max(1, (total_lib_items + lib_page_size - 1) // lib_page_size)
-
-            if str_lit.session_state.lib_page > total_lib_pages:
-                str_lit.session_state.lib_page = total_lib_pages
-
-            if not paged_library:
-                str_lit.info("No matching cards in your library.")
-            else:
-                for item in paged_library:
-                    render_library_row(item, sorted_tags)
-
-                render_pagination_bar(
-                    "lib_page",
-                    str_lit.session_state.lib_page,
-                    total_lib_pages,
-                    total_lib_items,
-                    key_suffix="bottom",
-                )
-
-        elif current_tab == "❤️ Wishlist":
-            wish_page_size = str_lit.selectbox(
-                "Per Page",
-                options=[25, 50, 100],
-                index=0,
-                key="wish_page_size_select",
-                on_change=lambda: str_lit.session_state.update({"wish_page": 1}),
-            )
-
-            offset = (str_lit.session_state.wish_page - 1) * wish_page_size
-            paged_wishlist, total_wish_items = get_user_wishlist_paginated(
-                user_id=user["id"],
-                limit=wish_page_size,
-                offset=offset,
-                search_query=wish_query if wish_query else None,
-                sort_by=wish_sort_option,
-            )
-            total_wish_pages = max(1, (total_wish_items + wish_page_size - 1) // wish_page_size)
-
-            if str_lit.session_state.wish_page > total_wish_pages:
-                str_lit.session_state.wish_page = total_wish_pages
-
-            if not paged_wishlist:
-                str_lit.info("No matching items in your wishlist.")
-            else:
-                for idx, wish_item in enumerate(paged_wishlist):
-                    render_wishlist_row(wish_item, idx)
-
-                render_pagination_bar(
-                    "wish_page",
-                    str_lit.session_state.wish_page,
-                    total_wish_pages,
-                    total_wish_items,
-                    key_suffix="bottom",
-                )
