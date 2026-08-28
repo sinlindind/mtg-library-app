@@ -189,15 +189,12 @@ if str_lit.session_state.user is None:
 else:
     user = str_lit.session_state.user
 
-    # Fetch light cached data instead of full database dump
+    # Fetch light cached data into session state if missing
     if "sorted_tags" not in str_lit.session_state:
         str_lit.session_state.sorted_tags = get_user_tags(user["id"])
 
     if "library_qty_map" not in str_lit.session_state:
         str_lit.session_state.library_qty_map = get_user_card_quantities(user["id"])
-
-    sorted_tags = str_lit.session_state.sorted_tags
-    library_qty_map = str_lit.session_state.library_qty_map
 
     # --- STICKY TOP HEADER CONTAINER ---
     with str_lit.container():
@@ -263,11 +260,11 @@ else:
                     on_change=lambda: str_lit.session_state.update({"lib_page": 1}),
                 )
 
-            if sorted_tags:
+            if str_lit.session_state.sorted_tags:
                 with str_lit.expander("🏷️ **Filter by Tags**", expanded=False):
-                    tag_cols = str_lit.columns(min(len(sorted_tags), 6))
-                    for i, tag in enumerate(sorted_tags):
-                        col_idx = i % min(len(sorted_tags), 6)
+                    tag_cols = str_lit.columns(min(len(str_lit.session_state.sorted_tags), 6))
+                    for i, tag in enumerate(str_lit.session_state.sorted_tags):
+                        col_idx = i % min(len(str_lit.session_state.sorted_tags), 6)
                         with tag_cols[col_idx]:
                             if str_lit.checkbox(
                                 tag,
@@ -295,8 +292,8 @@ else:
                     on_change=lambda: str_lit.session_state.update({"wish_page": 1}),
                 )
 
-    # --- STANDARD ROW RENDERERS (REMOVED @FRAGMENT TO PREVENT RERUN BREAKAGE) ---
-    def render_search_row(card, idx, library_qty_map):
+    # --- STANDARD ROW RENDERERS ---
+    def render_search_row(card, idx):
         c_preview, c_info, c_price, c_actions = str_lit.columns([1.8, 3.0, 1.5, 3.0])
         img_url = get_card_image_url(card, size="large") or get_card_image_url(card, size="normal")
         usd = card.get("prices", {}).get("usd") or "N/A"
@@ -309,9 +306,11 @@ else:
         has_nonfoil = "nonfoil" in finishes
         has_foil = "foil" in finishes or "etched" in finishes
 
-        owned_dict = library_qty_map.get(card_id, {"reg": 0, "foil": 0})
-        owned_reg = owned_dict["reg"]
-        owned_foil = owned_dict["foil"]
+        # Read directly from session state cache to avoid stale values
+        qty_map = str_lit.session_state.get("library_qty_map", {})
+        owned_dict = qty_map.get(card_id, {"reg": 0, "foil": 0})
+        owned_reg = owned_dict.get("reg", 0)
+        owned_foil = owned_dict.get("foil", 0)
         str_lit.session_state.card_cache[card_id] = card
 
         with c_preview:
@@ -473,7 +472,7 @@ else:
 
             str_lit.caption(f"Found **{len(results)}** printings for `{search_query}` (Sorted by: {sort_option})")
             for idx, card in enumerate(results):
-                render_search_row(card, idx, library_qty_map)
+                render_search_row(card, idx)
         else:
             str_lit.info("Type a card name in the search bar above to query Scryfall.")
 
@@ -504,7 +503,7 @@ else:
             str_lit.info("No matching cards in your library.")
         else:
             for item in paged_library:
-                render_library_row(item, sorted_tags)
+                render_library_row(item, str_lit.session_state.sorted_tags)
 
             render_pagination_bar(
                 "lib_page",
