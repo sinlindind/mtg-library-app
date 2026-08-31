@@ -217,7 +217,7 @@ def get_user_tags(user_id: str) -> list[str]:
 def get_user_card_quantities(user_id: str) -> dict:
     response = (
         supabase.table("user_cards")
-        .select("scryfall_id, reg_quantity, foil_quantity")
+        .select("scryfall_id, card_name, reg_quantity, foil_quantity")
         .eq("user_id", user_id)
         .execute()
     )
@@ -226,18 +226,27 @@ def get_user_card_quantities(user_id: str) -> dict:
 
     qty_map = {}
     for entry in response.data:
-        sid = entry["scryfall_id"]
+        sid = entry.get("scryfall_id")
+        cname = entry.get("card_name")
         reg = entry.get("reg_quantity") or 0
         foil = entry.get("foil_quantity") or 0
-        
-        # Keep map keys normalized to lower-case string for strict equality checks
+
+        # Store quantity mapped by scryfall_id
         if sid:
-            key_id = str(sid).strip().lower()
-            if key_id not in qty_map:
-                qty_map[key_id] = {"reg": 0, "foil": 0}
-            qty_map[key_id]["reg"] += reg
-            qty_map[key_id]["foil"] += foil
-            
+            sid_key = str(sid).strip().lower()
+            if sid_key not in qty_map:
+                qty_map[sid_key] = {"reg": 0, "foil": 0}
+            qty_map[sid_key]["reg"] += reg
+            qty_map[sid_key]["foil"] += foil
+
+        # Store quantity mapped by lower-cased card_name as fallback
+        if cname:
+            cname_key = str(cname).strip().lower()
+            if cname_key not in qty_map:
+                qty_map[cname_key] = {"reg": 0, "foil": 0}
+            qty_map[cname_key]["reg"] += reg
+            qty_map[cname_key]["foil"] += foil
+
     return qty_map
 
 

@@ -193,9 +193,8 @@ if str_lit.session_state.user is None:
 else:
     user = str_lit.session_state.user
 
-    # Always ensure user cache is populated
-    if "sorted_tags" not in str_lit.session_state or "library_qty_map" not in str_lit.session_state:
-        refresh_user_cache(user["id"])
+    # Always fetch latest user cache to ensure quantity displays stay in sync
+    refresh_user_cache(user["id"])
 
     # --- STICKY TOP HEADER CONTAINER ---
     with str_lit.container():
@@ -298,10 +297,9 @@ else:
         usd = card.get("prices", {}).get("usd") or "N/A"
         usd_foil = card.get("prices", {}).get("usd_foil") or "N/A"
         
-        card_id = str(card["id"]).strip().lower()
+        card_id = str(card.get("id", "")).strip().lower()
         oracle_id = str(card.get("oracle_id", "")).strip().lower()
-        c_name = card.get("name")
-        s_name = card.get("set_name")
+        c_name = str(card.get("name", "")).strip().lower()
 
         finishes = card.get("finishes", [])
         has_nonfoil = "nonfoil" in finishes
@@ -309,8 +307,14 @@ else:
 
         qty_map = str_lit.session_state.get("library_qty_map", {})
         
-        # Match against exact Scryfall ID first, fall back to Oracle ID
-        owned_dict = qty_map.get(card_id) or qty_map.get(oracle_id) or {"reg": 0, "foil": 0}
+        # Priority resolution: Scryfall ID -> Oracle ID -> Card Name -> 0
+        owned_dict = (
+            qty_map.get(card_id)
+            or qty_map.get(oracle_id)
+            or qty_map.get(c_name)
+            or {"reg": 0, "foil": 0}
+        )
+        
         owned_reg = owned_dict.get("reg", 0)
         owned_foil = owned_dict.get("foil", 0)
         total_owned = owned_reg + owned_foil
@@ -321,7 +325,7 @@ else:
                 str_lit.image(img_url, use_container_width=True)
 
         with c_info:
-            str_lit.markdown(f"**{c_name}** · `{s_name}`")
+            str_lit.markdown(f"**{card.get('name')}** · `{card.get('set_name')}`")
             if total_owned > 0:
                 str_lit.markdown(f"📦 In Library: **{total_owned}x** ({owned_reg} Reg | {owned_foil} Foil)")
             else:
@@ -342,48 +346,48 @@ else:
                 if b1.button("➕ Reg", key=f"add_reg_{card_id}_{idx}"):
                     add_card_to_library(
                         user_id=user["id"],
-                        scryfall_id=card_id,
+                        scryfall_id=card["id"],
                         reg_quantity=1,
                         foil_quantity=0,
-                        card_name=c_name,
-                        set_name=s_name,
+                        card_name=card.get("name"),
+                        set_name=card.get("set_name"),
                         image_url=img_url,
                     )
                     refresh_user_cache(user["id"])
-                    str_lit.toast(f"Added {c_name} (Reg) to Library", icon="✅")
+                    str_lit.toast(f"Added {card.get('name')} (Reg) to Library", icon="✅")
                     str_lit.rerun()
 
             if has_foil:
                 if b2.button("✨ Foil", key=f"add_foil_{card_id}_{idx}"):
                     add_card_to_library(
                         user_id=user["id"],
-                        scryfall_id=card_id,
+                        scryfall_id=card["id"],
                         reg_quantity=0,
                         foil_quantity=1,
-                        card_name=c_name,
-                        set_name=s_name,
+                        card_name=card.get("name"),
+                        set_name=card.get("set_name"),
                         image_url=img_url,
                     )
                     refresh_user_cache(user["id"])
-                    str_lit.toast(f"Added {c_name} (Foil) to Library", icon="✨")
+                    str_lit.toast(f"Added {card.get('name')} (Foil) to Library", icon="✨")
                     str_lit.rerun()
 
             if b3.button("❤️ Wish", key=f"add_wish_{card_id}_{idx}"):
                 add_to_wishlist(
                     user_id=user["id"],
-                    scryfall_id=card_id,
-                    card_name=c_name,
-                    set_name=s_name,
+                    scryfall_id=card["id"],
+                    card_name=card.get("name"),
+                    set_name=card.get("set_name"),
                     image_url=img_url,
                 )
-                str_lit.toast(f"Added {c_name} to Wishlist", icon="❤️")
+                str_lit.toast(f"Added {card.get('name')} to Wishlist", icon="❤️")
                 str_lit.rerun()
 
         str_lit.divider()
 
     def render_library_row(item, sorted_tags):
         c_preview, c_info, c_details, c_qty, c_actions = str_lit.columns(
-            [0.8, 2.5, 1.7, 1.8, 2.2], vertical_alignment="center"
+            [0.8, 3.5, 2.0, 2.0, 1.2], vertical_alignment="center"
         )
 
         entry_id = item["id"]
@@ -414,25 +418,8 @@ else:
             )
 
         with c_actions:
-            b1, b2, b3 = str_lit.columns([1, 1, 1])
-
-            with b1:
-                if str_lit.button("➕ Reg", key=f"lib_inc_reg_{entry_id}"):
-                    update_library_card(entry_id, reg_quantity=reg_qty + 1)
-                    refresh_user_cache(user["id"])
-                    str_lit.toast(f"Incremented {card_name} (Reg)", icon="✅")
-                    str_lit.rerun()
-
-            with b2:
-                if str_lit.button("✨ Foil", key=f"lib_inc_foil_{entry_id}"):
-                    update_library_card(entry_id, foil_quantity=foil_qty + 1)
-                    refresh_user_cache(user["id"])
-                    str_lit.toast(f"Incremented {card_name} (Foil)", icon="✨")
-                    str_lit.rerun()
-
-            with b3:
-                if str_lit.button("⚙️", key=f"btn_manage_{entry_id}", help="Manage tags & exact quantities"):
-                    manage_card_dialog(item, user["id"], sorted_tags)
+            if str_lit.button("⚙️ Manage", key=f"btn_manage_{entry_id}", help="Manage tags & exact quantities"):
+                manage_card_dialog(item, user["id"], sorted_tags)
 
         str_lit.divider()
 
