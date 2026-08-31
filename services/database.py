@@ -229,10 +229,15 @@ def get_user_card_quantities(user_id: str) -> dict:
         sid = entry["scryfall_id"]
         reg = entry.get("reg_quantity") or 0
         foil = entry.get("foil_quantity") or 0
-        if sid not in qty_map:
-            qty_map[sid] = {"reg": 0, "foil": 0}
-        qty_map[sid]["reg"] += reg
-        qty_map[sid]["foil"] += foil
+        
+        # Keep map keys normalized to lower-case string for strict equality checks
+        if sid:
+            key_id = str(sid).strip().lower()
+            if key_id not in qty_map:
+                qty_map[key_id] = {"reg": 0, "foil": 0}
+            qty_map[key_id]["reg"] += reg
+            qty_map[key_id]["foil"] += foil
+            
     return qty_map
 
 

@@ -193,6 +193,7 @@ if str_lit.session_state.user is None:
 else:
     user = str_lit.session_state.user
 
+    # Always ensure user cache is populated
     if "sorted_tags" not in str_lit.session_state or "library_qty_map" not in str_lit.session_state:
         refresh_user_cache(user["id"])
 
@@ -296,7 +297,9 @@ else:
         img_url = get_card_image_url(card, size="large") or get_card_image_url(card, size="normal")
         usd = card.get("prices", {}).get("usd") or "N/A"
         usd_foil = card.get("prices", {}).get("usd_foil") or "N/A"
-        card_id = card["id"]
+        
+        card_id = str(card["id"]).strip().lower()
+        oracle_id = str(card.get("oracle_id", "")).strip().lower()
         c_name = card.get("name")
         s_name = card.get("set_name")
 
@@ -305,7 +308,9 @@ else:
         has_foil = "foil" in finishes or "etched" in finishes
 
         qty_map = str_lit.session_state.get("library_qty_map", {})
-        owned_dict = qty_map.get(card_id, {"reg": 0, "foil": 0})
+        
+        # Match against exact Scryfall ID first, fall back to Oracle ID
+        owned_dict = qty_map.get(card_id) or qty_map.get(oracle_id) or {"reg": 0, "foil": 0}
         owned_reg = owned_dict.get("reg", 0)
         owned_foil = owned_dict.get("foil", 0)
         total_owned = owned_reg + owned_foil
@@ -378,7 +383,7 @@ else:
 
     def render_library_row(item, sorted_tags):
         c_preview, c_info, c_details, c_qty, c_actions = str_lit.columns(
-            [0.8, 3.5, 2.0, 2.0, 1.2], vertical_alignment="center"
+            [0.8, 2.5, 1.7, 1.8, 2.2], vertical_alignment="center"
         )
 
         entry_id = item["id"]
@@ -409,8 +414,25 @@ else:
             )
 
         with c_actions:
-            if str_lit.button("⚙️ Manage", key=f"btn_manage_{entry_id}", help="Manage tags & exact quantities"):
-                manage_card_dialog(item, user["id"], sorted_tags)
+            b1, b2, b3 = str_lit.columns([1, 1, 1])
+
+            with b1:
+                if str_lit.button("➕ Reg", key=f"lib_inc_reg_{entry_id}"):
+                    update_library_card(entry_id, reg_quantity=reg_qty + 1)
+                    refresh_user_cache(user["id"])
+                    str_lit.toast(f"Incremented {card_name} (Reg)", icon="✅")
+                    str_lit.rerun()
+
+            with b2:
+                if str_lit.button("✨ Foil", key=f"lib_inc_foil_{entry_id}"):
+                    update_library_card(entry_id, foil_quantity=foil_qty + 1)
+                    refresh_user_cache(user["id"])
+                    str_lit.toast(f"Incremented {card_name} (Foil)", icon="✨")
+                    str_lit.rerun()
+
+            with b3:
+                if str_lit.button("⚙️", key=f"btn_manage_{entry_id}", help="Manage tags & exact quantities"):
+                    manage_card_dialog(item, user["id"], sorted_tags)
 
         str_lit.divider()
 
