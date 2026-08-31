@@ -182,7 +182,7 @@ def get_user_wishlist(user_id: str) -> list[dict]:
 # ==========================================
 
 
-def update_card_tags(entry_id: int, tags: list[str]):
+def update_card_tags(entry_id: str, tags: list[str]):
     return (
         supabase.table("user_cards")
         .update({"tags": tags})
@@ -197,7 +197,6 @@ def update_card_tags(entry_id: int, tags: list[str]):
 
 
 def get_user_tags(user_id: str) -> list[str]:
-    """Fetches unique tags for a user using Supabase RPC or lightweight query."""
     try:
         response = supabase.rpc("get_distinct_user_tags", {"p_user_id": user_id}).execute()
         if response.data:
@@ -216,7 +215,6 @@ def get_user_tags(user_id: str) -> list[str]:
 
 
 def get_user_card_quantities(user_id: str) -> dict:
-    """Only fetches scryfall_id, reg_quantity, and foil_quantity (minimal payload)."""
     response = (
         supabase.table("user_cards")
         .select("scryfall_id, reg_quantity, foil_quantity")

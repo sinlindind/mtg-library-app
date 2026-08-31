@@ -174,7 +174,7 @@ if str_lit.session_state.user is None:
         with str_lit.form("login_form", clear_on_submit=False):
             login_username = str_lit.text_input("Username", key="login_user")
             login_password = str_lit.text_input("Password", type="password", key="login_pass")
-            login_submitted = str_lit.form_submit_button("Login", width="stretch")
+            login_submitted = str_lit.form_submit_button("Login", use_container_width=True)
 
         if login_submitted:
             user_record = get_user_by_username(login_username)
@@ -306,22 +306,21 @@ else:
         has_nonfoil = "nonfoil" in finishes
         has_foil = "foil" in finishes or "etched" in finishes
 
-        # Read directly from current session state
         qty_map = str_lit.session_state.get("library_qty_map", {})
         owned_dict = qty_map.get(card_id, {"reg": 0, "foil": 0})
         owned_reg = owned_dict.get("reg", 0)
         owned_foil = owned_dict.get("foil", 0)
+        total_owned = owned_reg + owned_foil
         str_lit.session_state.card_cache[card_id] = card
 
         with c_preview:
             if img_url:
-                str_lit.image(img_url, width="stretch")
+                str_lit.image(img_url, use_container_width=True)
 
         with c_info:
             str_lit.markdown(f"**{c_name}** · `{s_name}`")
-
-            if owned_reg > 0 or owned_foil > 0:
-                str_lit.markdown(f"📦 In Library: **{owned_reg}x** Reg | **{owned_foil}x** Foil")
+            if total_owned > 0:
+                str_lit.markdown(f"📦 In Library: **{total_owned}x** ({owned_reg} Reg | {owned_foil} Foil)")
             else:
                 str_lit.caption("📦 In Library: **0x**")
 
@@ -380,21 +379,23 @@ else:
         str_lit.divider()
 
     def render_library_row(item, sorted_tags):
-        c_preview, c_info, c_details, c_qty, c_action = str_lit.columns(
-            [0.8, 3.0, 2.0, 1.5, 1.5], vertical_alignment="center"
+        c_preview, c_info, c_details, c_qty, c_actions = str_lit.columns(
+            [0.8, 2.5, 1.7, 1.8, 2.2], vertical_alignment="center"
         )
 
+        entry_id = item["id"]
         scryfall_id = item["scryfall_id"]
         card_name = item.get("card_name") or "Unknown Card"
         set_name = item.get("set_name") or "Unknown Set"
         img_url = item.get("image_url") or ""
         reg_qty = item.get("reg_quantity", 0)
         foil_qty = item.get("foil_quantity", 0)
+        total_qty = reg_qty + foil_qty
         tags = item.get("tags") or []
 
         with c_preview:
             if img_url:
-                str_lit.image(img_url, width="stretch")
+                str_lit.image(img_url, use_container_width=True)
 
         with c_info:
             str_lit.markdown(f"**{card_name}** · `{set_name}`")
@@ -406,13 +407,30 @@ else:
 
         with c_qty:
             str_lit.markdown(
-                f"<div style='text-align: right;'><b>Reg:</b> {reg_qty}x | <b>Foil:</b> {foil_qty}x</div>",
+                f"**Total: {total_qty}x**<br><small>Reg: {reg_qty} | Foil: {foil_qty}</small>",
                 unsafe_allow_html=True,
             )
 
-        with c_action:
-            if str_lit.button("⚙️ Manage", key=f"btn_manage_{scryfall_id}", width="stretch"):
-                manage_card_dialog(item, user["id"], sorted_tags)
+        with c_actions:
+            b1, b2, b3 = str_lit.columns([1, 1, 1])
+
+            with b1:
+                if str_lit.button("➕ Reg", key=f"lib_inc_reg_{entry_id}"):
+                    update_library_card(entry_id, reg_quantity=reg_qty + 1)
+                    refresh_user_cache(user["id"])
+                    str_lit.toast(f"Incremented {card_name} (Reg)", icon="✅")
+                    str_lit.rerun()
+
+            with b2:
+                if str_lit.button("✨ Foil", key=f"lib_inc_foil_{entry_id}"):
+                    update_library_card(entry_id, foil_quantity=foil_qty + 1)
+                    refresh_user_cache(user["id"])
+                    str_lit.toast(f"Incremented {card_name} (Foil)", icon="✨")
+                    str_lit.rerun()
+
+            with b3:
+                if str_lit.button("⚙️", key=f"btn_manage_{entry_id}", help="Manage tags & exact quantities"):
+                    manage_card_dialog(item, user["id"], sorted_tags)
 
         str_lit.divider()
 
@@ -428,7 +446,7 @@ else:
 
         with c_preview:
             if img_url:
-                str_lit.image(img_url, width="stretch")
+                str_lit.image(img_url, use_container_width=True)
 
         with c_info:
             str_lit.markdown(f"**{card_name}** · `{set_name}`")
@@ -437,9 +455,9 @@ else:
             b_tcg, b_rem = str_lit.columns(2)
             with b_tcg:
                 if tcg_url:
-                    str_lit.link_button("🛒 TCG", tcg_url, width="stretch")
+                    str_lit.link_button("🛒 TCG", tcg_url, use_container_width=True)
             with b_rem:
-                if str_lit.button("❌ Remove", key=f"rem_w_{scryfall_id}_{idx}", width="stretch"):
+                if str_lit.button("❌ Remove", key=f"rem_w_{scryfall_id}_{idx}", use_container_width=True):
                     remove_from_wishlist(user["id"], scryfall_id)
                     str_lit.toast("Removed from Wishlist", icon="🗑️")
                     str_lit.rerun()
