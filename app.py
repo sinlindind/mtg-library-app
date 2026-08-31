@@ -64,8 +64,8 @@ SIMPLE_SORT_OPTIONS = ["Name (A-Z)", "Name (Z-A)"]
 if "user" not in str_lit.session_state:
     str_lit.session_state.user = None
 
-if "scryfall_search" not in str_lit.session_state:
-    str_lit.session_state.scryfall_search = ""
+if "scryfall_search_input" not in str_lit.session_state:
+    str_lit.session_state.scryfall_search_input = ""
 
 if "card_cache" not in str_lit.session_state:
     str_lit.session_state.card_cache = {}
@@ -227,11 +227,10 @@ else:
             with search_col:
                 search_query = str_lit.text_input(
                     "Scryfall Search",
-                    value=str_lit.session_state.get("scryfall_search", ""),
                     placeholder="Search Scryfall... e.g. Sol Ring, Black Lotus",
                     key="scryfall_search_input",
                     label_visibility="collapsed",
-                )
+                ).strip()
             with sort_col:
                 sort_option = str_lit.selectbox(
                     "Sort Search Results",
@@ -239,7 +238,6 @@ else:
                     key="search_sort_option",
                     label_visibility="collapsed",
                 )
-            str_lit.session_state["scryfall_search"] = search_query
 
         elif current_tab == "📚 Library":
             search_col, sort_col = str_lit.columns([3.5, 1.5], vertical_alignment="center")
@@ -380,11 +378,10 @@ else:
 
     def render_library_row(item, sorted_tags):
         c_preview, c_info, c_details, c_qty, c_actions = str_lit.columns(
-            [0.8, 2.5, 1.7, 1.8, 2.2], vertical_alignment="center"
+            [0.8, 3.5, 2.0, 2.0, 1.2], vertical_alignment="center"
         )
 
         entry_id = item["id"]
-        scryfall_id = item["scryfall_id"]
         card_name = item.get("card_name") or "Unknown Card"
         set_name = item.get("set_name") or "Unknown Set"
         img_url = item.get("image_url") or ""
@@ -412,25 +409,8 @@ else:
             )
 
         with c_actions:
-            b1, b2, b3 = str_lit.columns([1, 1, 1])
-
-            with b1:
-                if str_lit.button("➕ Reg", key=f"lib_inc_reg_{entry_id}"):
-                    update_library_card(entry_id, reg_quantity=reg_qty + 1)
-                    refresh_user_cache(user["id"])
-                    str_lit.toast(f"Incremented {card_name} (Reg)", icon="✅")
-                    str_lit.rerun()
-
-            with b2:
-                if str_lit.button("✨ Foil", key=f"lib_inc_foil_{entry_id}"):
-                    update_library_card(entry_id, foil_quantity=foil_qty + 1)
-                    refresh_user_cache(user["id"])
-                    str_lit.toast(f"Incremented {card_name} (Foil)", icon="✨")
-                    str_lit.rerun()
-
-            with b3:
-                if str_lit.button("⚙️", key=f"btn_manage_{entry_id}", help="Manage tags & exact quantities"):
-                    manage_card_dialog(item, user["id"], sorted_tags)
+            if str_lit.button("⚙️ Manage", key=f"btn_manage_{entry_id}", help="Manage tags & exact quantities"):
+                manage_card_dialog(item, user["id"], sorted_tags)
 
         str_lit.divider()
 
