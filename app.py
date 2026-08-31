@@ -156,7 +156,7 @@ def manage_card_dialog(item, user_id, all_existing_tags):
             update_library_card(entry_id, reg_quantity=new_reg_qty, foil_quantity=new_foil_qty)
             update_card_tags(entry_id, combined_tags)
             str_lit.toast("Updated quantity & tags", icon="✅")
-        
+
         refresh_user_cache(user_id)
         str_lit.rerun()
 
@@ -179,6 +179,7 @@ if str_lit.session_state.user is None:
                 stored_hash, stored_salt = user_record["password_hash"].split(":")
                 if verify_password(login_password, stored_hash, stored_salt):
                     str_lit.session_state.user = user_record
+                    refresh_user_cache(user_record["id"])
                     str_lit.rerun()
                 else:
                     str_lit.error("Invalid username or password.")
@@ -319,10 +320,12 @@ else:
 
         with c_info:
             str_lit.markdown(f"**{c_name}** · `{s_name}`")
+
+            # Displays quantity owned in user library
             if owned_reg > 0 or owned_foil > 0:
-                str_lit.markdown(f"📦 Library: **{owned_reg}x** Reg | **{owned_foil}x** Foil")
+                str_lit.markdown(f"📦 In Library: **{owned_reg}x** Reg | **{owned_foil}x** Foil")
             else:
-                str_lit.caption("Not in library")
+                str_lit.caption("📦 In Library: **0x**")
 
         with c_price:
             price_str = []

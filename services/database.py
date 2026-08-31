@@ -192,76 +192,16 @@ def update_card_tags(entry_id: int, tags: list[str]):
 
 
 # ==========================================
-# Pagination Functions
+# Metadata & Pagination Functions
 # ==========================================
 
-
-def get_user_library_paginated(
-    user_id,
-    limit=25,
-    offset=0,
-    search_query=None,
-    sort_by="Name (A-Z)",
-):
-    query = (
-        supabase.table("user_cards")
-        .select("*", count="exact")
-        .eq("user_id", user_id)
-        .or_("reg_quantity.gt.0,foil_quantity.gt.0")
-    )
-
-    if search_query:
-        query = query.or_(
-            f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%"
-        )
-
-    if sort_by == "Name (Z-A)":
-        query = query.order("card_name", desc=True)
-    else:
-        query = query.order("card_name", desc=False)
-
-    response = query.range(offset, offset + limit - 1).execute()
-    rows = response.data if response.data else []
-    total_count = response.count if response.count is not None else len(rows)
-
-    return rows, total_count
-
-
-def get_user_wishlist_paginated(
-    user_id,
-    limit=25,
-    offset=0,
-    search_query=None,
-    sort_by="Name (A-Z)",
-):
-    query = (
-        supabase.table("wishlists")
-        .select("*", count="exact")
-        .eq("user_id", user_id)
-    )
-
-    if search_query:
-        query = query.or_(
-            f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%"
-        )
-
-    if sort_by == "Name (Z-A)":
-        query = query.order("card_name", desc=True)
-    else:
-        query = query.order("card_name", desc=False)
-
-    response = query.range(offset, offset + limit - 1).execute()
-    items = response.data if response.data else []
-    total_count = response.count if response.count is not None else len(items)
-
-    return items, total_count
 
 def get_user_tags(user_id: str) -> list[str]:
     """Fetches unique tags for a user using Supabase RPC or lightweight query."""
     response = supabase.rpc("get_distinct_user_tags", {"p_user_id": user_id}).execute()
     if response.data:
         return [r["tag"] for r in response.data]
-    
+
     # Fallback if RPC isn't created: only select the 'tags' column
     res = supabase.table("user_cards").select("tags").eq("user_id", user_id).execute()
     if not res.data:
@@ -283,7 +223,7 @@ def get_user_card_quantities(user_id: str) -> dict:
     )
     if not response.data:
         return {}
-    
+
     qty_map = {}
     for entry in response.data:
         sid = entry["scryfall_id"]
@@ -328,3 +268,33 @@ def get_user_library_paginated(
     total_count = response.count if response.count is not None else len(rows)
 
     return rows, total_count
+
+
+def get_user_wishlist_paginated(
+    user_id,
+    limit=25,
+    offset=0,
+    search_query=None,
+    sort_by="Name (A-Z)",
+):
+    query = (
+        supabase.table("wishlists")
+        .select("*", count="exact")
+        .eq("user_id", user_id)
+    )
+
+    if search_query:
+        query = query.or_(
+            f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%"
+        )
+
+    if sort_by == "Name (Z-A)":
+        query = query.order("card_name", desc=True)
+    else:
+        query = query.order("card_name", desc=False)
+
+    response = query.range(offset, offset + limit - 1).execute()
+    items = response.data if response.data else []
+    total_count = response.count if response.count is not None else len(items)
+
+    return items, total_count
