@@ -297,26 +297,32 @@ else:
         usd = card.get("prices", {}).get("usd") or "N/A"
         usd_foil = card.get("prices", {}).get("usd_foil") or "N/A"
 
-        # Extract & Normalize Identifier Keys
+        # 1. Normalize identifiers
         raw_id = str(card.get("id", "")).strip()
         card_id = raw_id.lower()
         oracle_id = str(card.get("oracle_id", "")).strip().lower()
-        c_name = card.get("name") or "Unknown Card"
+        
+        raw_name = card.get("name") or "Unknown Card"
+        c_name = raw_name
         s_name = card.get("set_name") or "Unknown Set"
-        lookup_name = c_name.strip().lower()
+
+        # Handle exact names and split/dual-face names ("Front // Back")
+        lookup_name = raw_name.strip().lower()
+        primary_face_name = raw_name.split("//")[0].strip().lower()
 
         finishes = card.get("finishes", [])
         has_nonfoil = "nonfoil" in finishes
         has_foil = "foil" in finishes or "etched" in finishes
 
-        # Read latest map directly from session state
+        # 2. Retrieve state map
         qty_map = str_lit.session_state.get("library_qty_map", {})
 
-        # Priority chain for mapping quantity
+        # 3. Complete Fallback Chain (UUID -> Oracle -> Full Name -> Primary Face Name)
         owned_dict = (
             qty_map.get(card_id)
             or qty_map.get(oracle_id)
             or qty_map.get(lookup_name)
+            or qty_map.get(primary_face_name)
             or {"reg": 0, "foil": 0}
         )
 
@@ -349,7 +355,6 @@ else:
 
             if has_nonfoil:
                 if b1.button("➕ Reg", key=f"add_reg_{card_id}_{idx}"):
-                    # 1. Database Write
                     add_card_to_library(
                         user_id=user["id"],
                         scryfall_id=raw_id,
@@ -359,22 +364,12 @@ else:
                         set_name=s_name,
                         image_url=img_url,
                     )
-                    
-                    # 2. Mutate Local State Immediately across both keys
-                    for key in [card_id, oracle_id, lookup_name]:
-                        if key:
-                            if key not in str_lit.session_state.library_qty_map:
-                                str_lit.session_state.library_qty_map[key] = {"reg": 0, "foil": 0}
-                            str_lit.session_state.library_qty_map[key]["reg"] += 1
-
-                    # 3. Pull latest DB records & re-render UI pass
                     refresh_user_cache(user["id"])
                     str_lit.toast(f"Added {c_name} (Reg) to Library", icon="✅")
                     str_lit.rerun()
 
             if has_foil:
                 if b2.button("✨ Foil", key=f"add_foil_{card_id}_{idx}"):
-                    # 1. Database Write
                     add_card_to_library(
                         user_id=user["id"],
                         scryfall_id=raw_id,
@@ -384,15 +379,6 @@ else:
                         set_name=s_name,
                         image_url=img_url,
                     )
-
-                    # 2. Mutate Local State Immediately across both keys
-                    for key in [card_id, oracle_id, lookup_name]:
-                        if key:
-                            if key not in str_lit.session_state.library_qty_map:
-                                str_lit.session_state.library_qty_map[key] = {"reg": 0, "foil": 0}
-                            str_lit.session_state.library_qty_map[key]["foil"] += 1
-
-                    # 3. Pull latest DB records & re-render UI pass
                     refresh_user_cache(user["id"])
                     str_lit.toast(f"Added {c_name} (Foil) to Library", icon="✨")
                     str_lit.rerun()
@@ -480,7 +466,7 @@ else:
 
     # --- MAIN VIEW EXECUTION ---
     if current_tab == "🔍 Search":
-        str_lit.write("DEBUG - Library Qty Map Contents:", str_lit.session_state.get("library_qty_map"))
+        # str_lit.write("DEBUG - Library Qty Map Contents:", str_lit.session_state.get("library_qty_map"))
         if search_query:
             results = search_cards(search_query)
 
