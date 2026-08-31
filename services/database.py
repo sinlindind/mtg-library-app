@@ -77,8 +77,8 @@ def add_card_to_library(
 
     if existing_entry.data:
         card_record = existing_entry.data[0]
-        new_reg = (card_record.get("reg_quantity") or 0) + reg_quantity
-        new_foil = (card_record.get("foil_quantity") or 0) + foil_quantity
+        new_reg = card_record.get("reg_quantity", 0) + reg_quantity
+        new_foil = card_record.get("foil_quantity", 0) + foil_quantity
 
         response = (
             supabase.table("user_cards")
@@ -182,7 +182,7 @@ def get_user_wishlist(user_id: str) -> list[dict]:
 # ==========================================
 
 
-def update_card_tags(entry_id: str, tags: list[str]):
+def update_card_tags(entry_id: int, tags: list[str]):
     return (
         supabase.table("user_cards")
         .update({"tags": tags})
@@ -192,62 +192,8 @@ def update_card_tags(entry_id: str, tags: list[str]):
 
 
 # ==========================================
-# Metadata & Pagination Functions
+# Pagination Functions
 # ==========================================
-
-
-def get_user_tags(user_id: str) -> list[str]:
-    try:
-        response = supabase.rpc("get_distinct_user_tags", {"p_user_id": user_id}).execute()
-        if response.data:
-            return [r["tag"] for r in response.data]
-    except Exception:
-        pass
-
-    res = supabase.table("user_cards").select("tags").eq("user_id", user_id).execute()
-    if not res.data:
-        return []
-    tags = set()
-    for row in res.data:
-        if row.get("tags"):
-            tags.update(row["tags"])
-    return sorted(list(tags))
-
-
-def get_user_card_quantities(user_id: str) -> dict:
-    response = (
-        supabase.table("user_cards")
-        .select("scryfall_id, card_name, reg_quantity, foil_quantity")
-        .eq("user_id", user_id)
-        .execute()
-    )
-    if not response.data:
-        return {}
-
-    qty_map = {}
-    for entry in response.data:
-        sid = entry.get("scryfall_id")
-        cname = entry.get("card_name")
-        reg = entry.get("reg_quantity") or 0
-        foil = entry.get("foil_quantity") or 0
-
-        # Store quantity mapped by scryfall_id
-        if sid:
-            sid_key = str(sid).strip().lower()
-            if sid_key not in qty_map:
-                qty_map[sid_key] = {"reg": 0, "foil": 0}
-            qty_map[sid_key]["reg"] += reg
-            qty_map[sid_key]["foil"] += foil
-
-        # Store quantity mapped by normalized card name as fallback
-        if cname:
-            cname_key = str(cname).strip().lower()
-            if cname_key not in qty_map:
-                qty_map[cname_key] = {"reg": 0, "foil": 0}
-            qty_map[cname_key]["reg"] += reg
-            qty_map[cname_key]["foil"] += foil
-
-    return qty_map
 
 
 def get_user_library_paginated(
@@ -255,7 +201,6 @@ def get_user_library_paginated(
     limit=25,
     offset=0,
     search_query=None,
-    tags=None,
     sort_by="Name (A-Z)",
 ):
     query = (
@@ -269,9 +214,6 @@ def get_user_library_paginated(
         query = query.or_(
             f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%"
         )
-
-    if tags:
-        query = query.cs("tags", tags)
 
     if sort_by == "Name (Z-A)":
         query = query.order("card_name", desc=True)
@@ -313,3 +255,76 @@ def get_user_wishlist_paginated(
     total_count = response.count if response.count is not None else len(items)
 
     return items, total_count
+
+def get_user_tags(user_id: str) -> list[str]:
+    """Fetches unique tags for a user using Supabase RPC or lightweight query."""
+    response = supabase.rpc("get_distinct_user_tags", {"p_user_id": user_id}).execute()
+    if response.data:
+        return [r["tag"] for r in response.data]
+    
+    # Fallback if RPC isn't created: only select the 'tags' column
+    res = supabase.table("user_cards").select("tags").eq("user_id", user_id).execute()
+    if not res.data:
+        return []
+    tags = set()
+    for row in res.data:
+        if row.get("tags"):
+            tags.update(row["tags"])
+    return sorted(list(tags))
+
+
+def get_user_card_quantities(user_id: str) -> dict:
+    """Only fetches scryfall_id, reg_quantity, and foil_quantity (minimal payload)."""
+    response = (
+        supabase.table("user_cards")
+        .select("scryfall_id, reg_quantity, foil_quantity")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not response.data:
+        return {}
+    
+    qty_map = {}
+    for entry in response.data:
+        sid = entry["scryfall_id"]
+        if sid not in qty_map:
+            qty_map[sid] = {"reg": 0, "foil": 0}
+        qty_map[sid]["reg"] += entry.get("reg_quantity", 0)
+        qty_map[sid]["foil"] += entry.get("foil_quantity", 0)
+    return qty_map
+
+
+def get_user_library_paginated(
+    user_id,
+    limit=25,
+    offset=0,
+    search_query=None,
+    tags=None,
+    sort_by="Name (A-Z)",
+):
+    query = (
+        supabase.table("user_cards")
+        .select("*", count="exact")
+        .eq("user_id", user_id)
+        .or_("reg_quantity.gt.0,foil_quantity.gt.0")
+    )
+
+    if search_query:
+        query = query.or_(
+            f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%"
+        )
+
+    # Postgres Array Overlap filter (cs = contains)
+    if tags:
+        query = query.cs("tags", tags)
+
+    if sort_by == "Name (Z-A)":
+        query = query.order("card_name", desc=True)
+    else:
+        query = query.order("card_name", desc=False)
+
+    response = query.range(offset, offset + limit - 1).execute()
+    rows = response.data if response.data else []
+    total_count = response.count if response.count is not None else len(rows)
+
+    return rows, total_count
