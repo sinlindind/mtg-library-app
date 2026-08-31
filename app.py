@@ -64,8 +64,8 @@ SIMPLE_SORT_OPTIONS = ["Name (A-Z)", "Name (Z-A)"]
 if "user" not in str_lit.session_state:
     str_lit.session_state.user = None
 
-if "scryfall_search" not in str_lit.session_state:
-    str_lit.session_state.scryfall_search = ""
+if "scryfall_search_input" not in str_lit.session_state:
+    str_lit.session_state.scryfall_search_input = ""
 
 if "card_cache" not in str_lit.session_state:
     str_lit.session_state.card_cache = {}
@@ -75,6 +75,9 @@ if "lib_page" not in str_lit.session_state:
 
 if "wish_page" not in str_lit.session_state:
     str_lit.session_state.wish_page = 1
+
+if "library_qty_map" not in str_lit.session_state:
+    str_lit.session_state.library_qty_map = {}
 
 
 def refresh_user_cache(user_id):
@@ -156,7 +159,7 @@ def manage_card_dialog(item, user_id, all_existing_tags):
             update_library_card(entry_id, reg_quantity=new_reg_qty, foil_quantity=new_foil_qty)
             update_card_tags(entry_id, combined_tags)
             str_lit.toast("Updated quantity & tags", icon="✅")
-        
+
         refresh_user_cache(user_id)
         str_lit.rerun()
 
@@ -171,7 +174,7 @@ if str_lit.session_state.user is None:
         with str_lit.form("login_form", clear_on_submit=False):
             login_username = str_lit.text_input("Username", key="login_user")
             login_password = str_lit.text_input("Password", type="password", key="login_pass")
-            login_submitted = str_lit.form_submit_button("Login", width="stretch")
+            login_submitted = str_lit.form_submit_button("Login", use_container_width=True)
 
         if login_submitted:
             user_record = get_user_by_username(login_username)
@@ -179,6 +182,7 @@ if str_lit.session_state.user is None:
                 stored_hash, stored_salt = user_record["password_hash"].split(":")
                 if verify_password(login_password, stored_hash, stored_salt):
                     str_lit.session_state.user = user_record
+                    refresh_user_cache(user_record["id"])
                     str_lit.rerun()
                 else:
                     str_lit.error("Invalid username or password.")
@@ -189,15 +193,8 @@ if str_lit.session_state.user is None:
 else:
     user = str_lit.session_state.user
 
-    # Mandatory runtime refresh so quantity counters render immediately on script run
+    # Mandatory refresh on every render cycle so search counters stay current
     refresh_user_cache(user["id"])
-
-    # Fetch light cached data into session state if missing
-    if "sorted_tags" not in str_lit.session_state:
-        str_lit.session_state.sorted_tags = get_user_tags(user["id"])
-
-    if "library_qty_map" not in str_lit.session_state:
-        str_lit.session_state.library_qty_map = get_user_card_quantities(user["id"])
 
     # --- STICKY TOP HEADER CONTAINER ---
     with str_lit.container():
@@ -230,11 +227,10 @@ else:
             with search_col:
                 search_query = str_lit.text_input(
                     "Scryfall Search",
-                    value=str_lit.session_state.get("scryfall_search", ""),
                     placeholder="Search Scryfall... e.g. Sol Ring, Black Lotus",
                     key="scryfall_search_input",
                     label_visibility="collapsed",
-                )
+                ).strip()
             with sort_col:
                 sort_option = str_lit.selectbox(
                     "Sort Search Results",
@@ -242,7 +238,6 @@ else:
                     key="search_sort_option",
                     label_visibility="collapsed",
                 )
-            str_lit.session_state["scryfall_search"] = search_query
 
         elif current_tab == "📚 Library":
             search_col, sort_col = str_lit.columns([3.5, 1.5], vertical_alignment="center")
@@ -302,10 +297,11 @@ else:
         usd = card.get("prices", {}).get("usd") or "N/A"
         usd_foil = card.get("prices", {}).get("usd_foil") or "N/A"
         
-        # Lowercase all keys for reliable dict lookup
         card_id = str(card.get("id", "")).strip().lower()
         oracle_id = str(card.get("oracle_id", "")).strip().lower()
-        c_name = str(card.get("name", "")).strip().lower()
+        c_name = card.get("name") or "Unknown Card"
+        s_name = card.get("set_name") or "Unknown Set"
+        lookup_name = c_name.strip().lower()
 
         finishes = card.get("finishes", [])
         has_nonfoil = "nonfoil" in finishes
@@ -313,11 +309,10 @@ else:
 
         qty_map = str_lit.session_state.get("library_qty_map", {})
         
-        # Resolution order: Exact Printing ID -> Oracle ID -> Card Name -> Fallback Default
         owned_dict = (
             qty_map.get(card_id)
             or qty_map.get(oracle_id)
-            or qty_map.get(c_name)
+            or qty_map.get(lookup_name)
             or {"reg": 0, "foil": 0}
         )
         
@@ -328,14 +323,14 @@ else:
 
         with c_preview:
             if img_url:
-                str_lit.image(img_url, width="stretch")
+                str_lit.image(img_url, use_container_width=True)
 
         with c_info:
             str_lit.markdown(f"**{c_name}** · `{s_name}`")
-            if owned_reg > 0 or owned_foil > 0:
-                str_lit.markdown(f"📦 Library: **{owned_reg}x** Reg | **{owned_foil}x** Foil")
+            if total_owned > 0:
+                str_lit.markdown(f"📦 In Library: **{total_owned}x** ({owned_reg} Reg | {owned_foil} Foil)")
             else:
-                str_lit.caption("Not in library")
+                str_lit.caption("📦 In Library: **0x**")
 
         with c_price:
             price_str = []
@@ -352,61 +347,62 @@ else:
                 if b1.button("➕ Reg", key=f"add_reg_{card_id}_{idx}"):
                     add_card_to_library(
                         user_id=user["id"],
-                        scryfall_id=card_id,
+                        scryfall_id=card["id"],
                         reg_quantity=1,
                         foil_quantity=0,
-                        card_name=c_name,
-                        set_name=s_name,
+                        card_name=card.get("name"),
+                        set_name=card.get("set_name"),
                         image_url=img_url,
                     )
                     refresh_user_cache(user["id"])
-                    str_lit.toast(f"Added {c_name} (Reg) to Library", icon="✅")
+                    str_lit.toast(f"Added {card.get('name')} (Reg) to Library", icon="✅")
                     str_lit.rerun()
 
             if has_foil:
                 if b2.button("✨ Foil", key=f"add_foil_{card_id}_{idx}"):
                     add_card_to_library(
                         user_id=user["id"],
-                        scryfall_id=card_id,
+                        scryfall_id=card["id"],
                         reg_quantity=0,
                         foil_quantity=1,
-                        card_name=c_name,
-                        set_name=s_name,
+                        card_name=card.get("name"),
+                        set_name=card.get("set_name"),
                         image_url=img_url,
                     )
                     refresh_user_cache(user["id"])
-                    str_lit.toast(f"Added {c_name} (Foil) to Library", icon="✨")
+                    str_lit.toast(f"Added {card.get('name')} (Foil) to Library", icon="✨")
                     str_lit.rerun()
 
             if b3.button("❤️ Wish", key=f"add_wish_{card_id}_{idx}"):
                 add_to_wishlist(
                     user_id=user["id"],
-                    scryfall_id=card_id,
-                    card_name=c_name,
-                    set_name=s_name,
+                    scryfall_id=card["id"],
+                    card_name=card.get("name"),
+                    set_name=card.get("set_name"),
                     image_url=img_url,
                 )
-                str_lit.toast(f"Added {c_name} to Wishlist", icon="❤️")
+                str_lit.toast(f"Added {card.get('name')} to Wishlist", icon="❤️")
                 str_lit.rerun()
 
         str_lit.divider()
 
     def render_library_row(item, sorted_tags):
-        c_preview, c_info, c_details, c_qty, c_action = str_lit.columns(
-            [0.8, 3.0, 2.0, 1.5, 1.5], vertical_alignment="center"
+        c_preview, c_info, c_details, c_qty, c_actions = str_lit.columns(
+            [0.8, 3.5, 2.0, 2.0, 1.2], vertical_alignment="center"
         )
 
-        scryfall_id = item["scryfall_id"]
+        entry_id = item["id"]
         card_name = item.get("card_name") or "Unknown Card"
         set_name = item.get("set_name") or "Unknown Set"
         img_url = item.get("image_url") or ""
         reg_qty = item.get("reg_quantity", 0)
         foil_qty = item.get("foil_quantity", 0)
+        total_qty = reg_qty + foil_qty
         tags = item.get("tags") or []
 
         with c_preview:
             if img_url:
-                str_lit.image(img_url, width="stretch")
+                str_lit.image(img_url, use_container_width=True)
 
         with c_info:
             str_lit.markdown(f"**{card_name}** · `{set_name}`")
@@ -418,12 +414,12 @@ else:
 
         with c_qty:
             str_lit.markdown(
-                f"<div style='text-align: right;'><b>Reg:</b> {reg_qty}x | <b>Foil:</b> {foil_qty}x</div>",
+                f"**Total: {total_qty}x**<br><small>Reg: {reg_qty} | Foil: {foil_qty}</small>",
                 unsafe_allow_html=True,
             )
 
-        with c_action:
-            if str_lit.button("⚙️ Manage", key=f"btn_manage_{scryfall_id}", width="stretch"):
+        with c_actions:
+            if str_lit.button("⚙️ Manage", key=f"btn_manage_{entry_id}", help="Manage tags & exact quantities"):
                 manage_card_dialog(item, user["id"], sorted_tags)
 
         str_lit.divider()
@@ -440,7 +436,7 @@ else:
 
         with c_preview:
             if img_url:
-                str_lit.image(img_url, width="stretch")
+                str_lit.image(img_url, use_container_width=True)
 
         with c_info:
             str_lit.markdown(f"**{card_name}** · `{set_name}`")
@@ -449,9 +445,9 @@ else:
             b_tcg, b_rem = str_lit.columns(2)
             with b_tcg:
                 if tcg_url:
-                    str_lit.link_button("🛒 TCG", tcg_url, width="stretch")
+                    str_lit.link_button("🛒 TCG", tcg_url, use_container_width=True)
             with b_rem:
-                if str_lit.button("❌ Remove", key=f"rem_w_{scryfall_id}_{idx}", width="stretch"):
+                if str_lit.button("❌ Remove", key=f"rem_w_{scryfall_id}_{idx}", use_container_width=True):
                     remove_from_wishlist(user["id"], scryfall_id)
                     str_lit.toast("Removed from Wishlist", icon="🗑️")
                     str_lit.rerun()
