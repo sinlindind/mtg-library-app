@@ -193,7 +193,7 @@ if str_lit.session_state.user is None:
 else:
     user = str_lit.session_state.user
 
-    # Mandatory refresh on every render cycle so search counters stay current
+    # Ensure quantity map is pulled on every render pass
     refresh_user_cache(user["id"])
 
     # --- STICKY TOP HEADER CONTAINER ---
@@ -296,7 +296,7 @@ else:
         img_url = get_card_image_url(card, size="large") or get_card_image_url(card, size="normal")
         usd = card.get("prices", {}).get("usd") or "N/A"
         usd_foil = card.get("prices", {}).get("usd_foil") or "N/A"
-        
+
         card_id = str(card.get("id", "")).strip().lower()
         oracle_id = str(card.get("oracle_id", "")).strip().lower()
         c_name = card.get("name") or "Unknown Card"
@@ -308,14 +308,14 @@ else:
         has_foil = "foil" in finishes or "etched" in finishes
 
         qty_map = str_lit.session_state.get("library_qty_map", {})
-        
+
         owned_dict = (
             qty_map.get(card_id)
             or qty_map.get(oracle_id)
             or qty_map.get(lookup_name)
             or {"reg": 0, "foil": 0}
         )
-        
+
         owned_reg = owned_dict.get("reg", 0)
         owned_foil = owned_dict.get("foil", 0)
         total_owned = owned_reg + owned_foil
@@ -350,12 +350,17 @@ else:
                         scryfall_id=card["id"],
                         reg_quantity=1,
                         foil_quantity=0,
-                        card_name=card.get("name"),
-                        set_name=card.get("set_name"),
+                        card_name=c_name,
+                        set_name=s_name,
                         image_url=img_url,
                     )
+                    # Immediate local state update for instant render
+                    if card_id not in str_lit.session_state.library_qty_map:
+                        str_lit.session_state.library_qty_map[card_id] = {"reg": 0, "foil": 0}
+                    str_lit.session_state.library_qty_map[card_id]["reg"] += 1
+
                     refresh_user_cache(user["id"])
-                    str_lit.toast(f"Added {card.get('name')} (Reg) to Library", icon="✅")
+                    str_lit.toast(f"Added {c_name} (Reg) to Library", icon="✅")
                     str_lit.rerun()
 
             if has_foil:
@@ -365,23 +370,28 @@ else:
                         scryfall_id=card["id"],
                         reg_quantity=0,
                         foil_quantity=1,
-                        card_name=card.get("name"),
-                        set_name=card.get("set_name"),
+                        card_name=c_name,
+                        set_name=s_name,
                         image_url=img_url,
                     )
+                    # Immediate local state update for instant render
+                    if card_id not in str_lit.session_state.library_qty_map:
+                        str_lit.session_state.library_qty_map[card_id] = {"reg": 0, "foil": 0}
+                    str_lit.session_state.library_qty_map[card_id]["foil"] += 1
+
                     refresh_user_cache(user["id"])
-                    str_lit.toast(f"Added {card.get('name')} (Foil) to Library", icon="✨")
+                    str_lit.toast(f"Added {c_name} (Foil) to Library", icon="✨")
                     str_lit.rerun()
 
             if b3.button("❤️ Wish", key=f"add_wish_{card_id}_{idx}"):
                 add_to_wishlist(
                     user_id=user["id"],
                     scryfall_id=card["id"],
-                    card_name=card.get("name"),
-                    set_name=card.get("set_name"),
+                    card_name=c_name,
+                    set_name=s_name,
                     image_url=img_url,
                 )
-                str_lit.toast(f"Added {card.get('name')} to Wishlist", icon="❤️")
+                str_lit.toast(f"Added {c_name} to Wishlist", icon="❤️")
                 str_lit.rerun()
 
         str_lit.divider()
