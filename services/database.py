@@ -1,12 +1,13 @@
 import streamlit as st
-from supabase import create_client, Client
+from supabase import Client, create_client
 
-# Initialize Supabase client
+
 @st.cache_resource
 def init_supabase() -> Client:
     url: str = st.secrets["supabase"]["url"]
     key: str = st.secrets["supabase"]["key"]
     return create_client(url, key)
+
 
 supabase = init_supabase()
 
@@ -14,33 +15,41 @@ supabase = init_supabase()
 # User Functions
 # ==========================================
 
-def create_user(username: str, email: str, password_hash: str, salt: str, verification_token: str = None):
-    """Inserts a new user record."""
+
+def create_user(
+    username: str,
+    email: str,
+    password_hash: str,
+    salt: str,
+    verification_token: str = None,
+):
     data = {
         "username": username,
         "email": email,
         "password_hash": f"{password_hash}:{salt}",
-        "verification_token": verification_token
+        "verification_token": verification_token,
     }
     response = supabase.table("users").insert(data).execute()
     return response.data[0] if response.data else None
 
 
 def get_user_by_username(username: str):
-    """Fetches user record by username."""
     response = supabase.table("users").select("*").eq("username", username).execute()
     return response.data[0] if response.data else None
 
 
 def get_user_by_email(email: str):
-    """Fetches user record by email."""
     response = supabase.table("users").select("*").eq("email", email).execute()
     return response.data[0] if response.data else None
 
 
 def verify_user_email(email: str):
-    """Updates user record status when email is verified."""
-    response = supabase.table("users").update({"is_verified": True}).eq("email", email).execute()
+    response = (
+        supabase.table("users")
+        .update({"is_verified": True})
+        .eq("email", email)
+        .execute()
+    )
     return response.data[0] if response.data else None
 
 
@@ -48,46 +57,44 @@ def verify_user_email(email: str):
 # User Cards Functions
 # ==========================================
 
+
 def add_card_to_library(
-    user_id: str, 
-    scryfall_id: str, 
-    finish: str, 
-    quantity: int, 
-    condition: str = "Near Mint", 
-    purchase_price: float = None,
-    language: str = "en",
-    notes: str = None
+    user_id: str,
+    scryfall_id: str,
+    reg_quantity: int = 0,
+    foil_quantity: int = 0,
+    card_name: str = None,
+    set_name: str = None,
+    image_url: str = None,
 ):
-    """
-    Adds or updates a card entry in user_cards.
-    Increments quantity if the unique card entry already exists.
-    """
-    existing_entry = supabase.table("user_cards") \
-        .select("id, quantity") \
-        .eq("user_id", user_id) \
-        .eq("scryfall_id", scryfall_id) \
-        .eq("finish", finish) \
-        .eq("condition", condition) \
+    existing_entry = (
+        supabase.table("user_cards")
+        .select("id, reg_quantity, foil_quantity")
+        .eq("user_id", user_id)
+        .eq("scryfall_id", scryfall_id)
         .execute()
+    )
 
     if existing_entry.data:
         card_record = existing_entry.data[0]
-        new_quantity = card_record["quantity"] + quantity
-        
-        response = supabase.table("user_cards") \
-            .update({"quantity": new_quantity}) \
-            .eq("id", card_record["id"]) \
+        new_reg = (card_record.get("reg_quantity") or 0) + reg_quantity
+        new_foil = (card_record.get("foil_quantity") or 0) + foil_quantity
+
+        response = (
+            supabase.table("user_cards")
+            .update({"reg_quantity": new_reg, "foil_quantity": new_foil})
+            .eq("id", card_record["id"])
             .execute()
+        )
     else:
         data = {
             "user_id": user_id,
             "scryfall_id": scryfall_id,
-            "finish": finish,
-            "condition": condition,
-            "language": language,
-            "quantity": quantity,
-            "purchase_price": purchase_price,
-            "notes": notes
+            "reg_quantity": reg_quantity,
+            "foil_quantity": foil_quantity,
+            "card_name": card_name,
+            "set_name": set_name,
+            "image_url": image_url,
         }
         response = supabase.table("user_cards").insert(data).execute()
 
@@ -95,36 +102,32 @@ def add_card_to_library(
 
 
 def get_user_library(user_id: str):
-    """Fetches all items in user_cards for a given user UUID."""
     response = supabase.table("user_cards").select("*").eq("user_id", user_id).execute()
     return response.data if response.data else []
 
-def update_library_card(entry_id: str, quantity: int = None, condition: str = None):
-    """Updates quantity and/or condition for a specific card entry in user_cards."""
+
+def update_library_card(entry_id: str, reg_quantity: int = None, foil_quantity: int = None):
     update_data = {}
-    if quantity is not None:
-        update_data["quantity"] = quantity
-    if condition is not None:
-        update_data["condition"] = condition
+    if reg_quantity is not None:
+        update_data["reg_quantity"] = reg_quantity
+    if foil_quantity is not None:
+        update_data["foil_quantity"] = foil_quantity
 
     if not update_data:
         return None
 
-    response = supabase.table("user_cards") \
-        .update(update_data) \
-        .eq("id", entry_id) \
+    response = (
+        supabase.table("user_cards")
+        .update(update_data)
+        .eq("id", entry_id)
         .execute()
-    
+    )
+
     return response.data[0] if response.data else None
 
 
 def remove_from_library(entry_id: str):
-    """Deletes a card entry from user_cards by its row ID."""
-    response = supabase.table("user_cards") \
-        .delete() \
-        .eq("id", entry_id) \
-        .execute()
-    
+    response = supabase.table("user_cards").delete().eq("id", entry_id).execute()
     return response.data
 
 
@@ -132,35 +135,172 @@ def remove_from_library(entry_id: str):
 # Wishlist Functions
 # ==========================================
 
-def add_to_wishlist(user_id: str, scryfall_id: str) -> bool:
-    """Adds a card to the user's wishlist in Supabase."""
+
+def add_to_wishlist(
+    user_id: str,
+    scryfall_id: str,
+    card_name: str = None,
+    set_name: str = None,
+    image_url: str = None,
+) -> bool:
     try:
         data = {
             "user_id": user_id,
-            "scryfall_id": scryfall_id
+            "scryfall_id": scryfall_id,
+            "card_name": card_name,
+            "set_name": set_name,
+            "image_url": image_url,
         }
         response = supabase.table("wishlists").insert(data).execute()
         return bool(response.data)
     except Exception:
-        return False  # Handles duplicate unique constraint gracefully
+        return False
 
 
 def remove_from_wishlist(user_id: str, scryfall_id: str) -> None:
-    """Removes a card from the user's wishlist in Supabase."""
-    supabase.table("wishlists") \
-        .delete() \
-        .eq("user_id", user_id) \
-        .eq("scryfall_id", scryfall_id) \
+    (
+        supabase.table("wishlists")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("scryfall_id", scryfall_id)
         .execute()
+    )
 
 
-def get_user_wishlist(user_id: str) -> list[str]:
-    """Returns a list of Scryfall IDs in the user's wishlist."""
-    response = supabase.table("wishlists") \
-        .select("scryfall_id") \
-        .eq("user_id", user_id) \
+def get_user_wishlist(user_id: str) -> list[dict]:
+    response = (
+        supabase.table("wishlists")
+        .select("*")
+        .eq("user_id", user_id)
         .execute()
-    
-    if response.data:
-        return [row["scryfall_id"] for row in response.data]
-    return []
+    )
+    return response.data if response.data else []
+
+
+# ==========================================
+# Card Tagging Functions
+# ==========================================
+
+
+def update_card_tags(entry_id: str, tags: list[str]):
+    return (
+        supabase.table("user_cards")
+        .update({"tags": tags})
+        .eq("id", entry_id)
+        .execute()
+    )
+
+
+# ==========================================
+# Metadata & Pagination Functions
+# ==========================================
+
+
+def get_user_tags(user_id: str) -> list[str]:
+    try:
+        response = supabase.rpc("get_distinct_user_tags", {"p_user_id": user_id}).execute()
+        if response.data:
+            return [r["tag"] for r in response.data]
+    except Exception:
+        pass
+
+    res = supabase.table("user_cards").select("tags").eq("user_id", user_id).execute()
+    if not res.data:
+        return []
+    tags = set()
+    for row in res.data:
+        if row.get("tags"):
+            tags.update(row["tags"])
+    return sorted(list(tags))
+
+
+def get_user_card_quantities(user_id: str) -> dict:
+    response = (
+        supabase.table("user_cards")
+        .select("scryfall_id, reg_quantity, foil_quantity")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not response.data:
+        return {}
+
+    qty_map = {}
+    for entry in response.data:
+        sid = entry["scryfall_id"]
+        reg = entry.get("reg_quantity") or 0
+        foil = entry.get("foil_quantity") or 0
+        
+        # Keep map keys normalized to lower-case string for strict equality checks
+        if sid:
+            key_id = str(sid).strip().lower()
+            if key_id not in qty_map:
+                qty_map[key_id] = {"reg": 0, "foil": 0}
+            qty_map[key_id]["reg"] += reg
+            qty_map[key_id]["foil"] += foil
+            
+    return qty_map
+
+
+def get_user_library_paginated(
+    user_id,
+    limit=25,
+    offset=0,
+    search_query=None,
+    tags=None,
+    sort_by="Name (A-Z)",
+):
+    query = (
+        supabase.table("user_cards")
+        .select("*", count="exact")
+        .eq("user_id", user_id)
+        .or_("reg_quantity.gt.0,foil_quantity.gt.0")
+    )
+
+    if search_query:
+        query = query.or_(
+            f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%"
+        )
+
+    if tags:
+        query = query.cs("tags", tags)
+
+    if sort_by == "Name (Z-A)":
+        query = query.order("card_name", desc=True)
+    else:
+        query = query.order("card_name", desc=False)
+
+    response = query.range(offset, offset + limit - 1).execute()
+    rows = response.data if response.data else []
+    total_count = response.count if response.count is not None else len(rows)
+
+    return rows, total_count
+
+
+def get_user_wishlist_paginated(
+    user_id,
+    limit=25,
+    offset=0,
+    search_query=None,
+    sort_by="Name (A-Z)",
+):
+    query = (
+        supabase.table("wishlists")
+        .select("*", count="exact")
+        .eq("user_id", user_id)
+    )
+
+    if search_query:
+        query = query.or_(
+            f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%"
+        )
+
+    if sort_by == "Name (Z-A)":
+        query = query.order("card_name", desc=True)
+    else:
+        query = query.order("card_name", desc=False)
+
+    response = query.range(offset, offset + limit - 1).execute()
+    items = response.data if response.data else []
+    total_count = response.count if response.count is not None else len(items)
+
+    return items, total_count
