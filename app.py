@@ -297,7 +297,9 @@ else:
         usd = card.get("prices", {}).get("usd") or "N/A"
         usd_foil = card.get("prices", {}).get("usd_foil") or "N/A"
 
-        card_id = str(card.get("id", "")).strip().lower()
+        # Extract & Normalize Identifier Keys
+        raw_id = str(card.get("id", "")).strip()
+        card_id = raw_id.lower()
         oracle_id = str(card.get("oracle_id", "")).strip().lower()
         c_name = card.get("name") or "Unknown Card"
         s_name = card.get("set_name") or "Unknown Set"
@@ -307,8 +309,10 @@ else:
         has_nonfoil = "nonfoil" in finishes
         has_foil = "foil" in finishes or "etched" in finishes
 
+        # Read latest map directly from session state
         qty_map = str_lit.session_state.get("library_qty_map", {})
 
+        # Priority chain for mapping quantity
         owned_dict = (
             qty_map.get(card_id)
             or qty_map.get(oracle_id)
@@ -345,40 +349,50 @@ else:
 
             if has_nonfoil:
                 if b1.button("➕ Reg", key=f"add_reg_{card_id}_{idx}"):
+                    # 1. Database Write
                     add_card_to_library(
                         user_id=user["id"],
-                        scryfall_id=card["id"],
+                        scryfall_id=raw_id,
                         reg_quantity=1,
                         foil_quantity=0,
                         card_name=c_name,
                         set_name=s_name,
                         image_url=img_url,
                     )
-                    # Immediate local state update for instant render
-                    if card_id not in str_lit.session_state.library_qty_map:
-                        str_lit.session_state.library_qty_map[card_id] = {"reg": 0, "foil": 0}
-                    str_lit.session_state.library_qty_map[card_id]["reg"] += 1
+                    
+                    # 2. Mutate Local State Immediately across both keys
+                    for key in [card_id, oracle_id, lookup_name]:
+                        if key:
+                            if key not in str_lit.session_state.library_qty_map:
+                                str_lit.session_state.library_qty_map[key] = {"reg": 0, "foil": 0}
+                            str_lit.session_state.library_qty_map[key]["reg"] += 1
 
+                    # 3. Pull latest DB records & re-render UI pass
                     refresh_user_cache(user["id"])
                     str_lit.toast(f"Added {c_name} (Reg) to Library", icon="✅")
                     str_lit.rerun()
 
             if has_foil:
                 if b2.button("✨ Foil", key=f"add_foil_{card_id}_{idx}"):
+                    # 1. Database Write
                     add_card_to_library(
                         user_id=user["id"],
-                        scryfall_id=card["id"],
+                        scryfall_id=raw_id,
                         reg_quantity=0,
                         foil_quantity=1,
                         card_name=c_name,
                         set_name=s_name,
                         image_url=img_url,
                     )
-                    # Immediate local state update for instant render
-                    if card_id not in str_lit.session_state.library_qty_map:
-                        str_lit.session_state.library_qty_map[card_id] = {"reg": 0, "foil": 0}
-                    str_lit.session_state.library_qty_map[card_id]["foil"] += 1
 
+                    # 2. Mutate Local State Immediately across both keys
+                    for key in [card_id, oracle_id, lookup_name]:
+                        if key:
+                            if key not in str_lit.session_state.library_qty_map:
+                                str_lit.session_state.library_qty_map[key] = {"reg": 0, "foil": 0}
+                            str_lit.session_state.library_qty_map[key]["foil"] += 1
+
+                    # 3. Pull latest DB records & re-render UI pass
                     refresh_user_cache(user["id"])
                     str_lit.toast(f"Added {c_name} (Foil) to Library", icon="✨")
                     str_lit.rerun()
@@ -386,7 +400,7 @@ else:
             if b3.button("❤️ Wish", key=f"add_wish_{card_id}_{idx}"):
                 add_to_wishlist(
                     user_id=user["id"],
-                    scryfall_id=card["id"],
+                    scryfall_id=raw_id,
                     card_name=c_name,
                     set_name=s_name,
                     image_url=img_url,

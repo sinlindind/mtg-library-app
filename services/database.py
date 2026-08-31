@@ -231,7 +231,7 @@ def get_user_card_quantities(user_id: str) -> dict:
         reg = entry.get("reg_quantity") or 0
         foil = entry.get("foil_quantity") or 0
 
-        # Primary Key: Lowercase Scryfall UUID
+        # Primary Lookup: Lowercase Scryfall UUID
         if sid:
             sid_key = str(sid).strip().lower()
             if sid_key not in qty_map:
@@ -239,7 +239,7 @@ def get_user_card_quantities(user_id: str) -> dict:
             qty_map[sid_key]["reg"] += reg
             qty_map[sid_key]["foil"] += foil
 
-        # Fallback Key: Lowercase Card Name
+        # Secondary/Fallback Lookup: Lowercase Card Name
         if cname:
             cname_key = str(cname).strip().lower()
             if cname_key not in qty_map:
