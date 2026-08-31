@@ -76,6 +76,9 @@ if "lib_page" not in str_lit.session_state:
 if "wish_page" not in str_lit.session_state:
     str_lit.session_state.wish_page = 1
 
+if "library_qty_map" not in str_lit.session_state:
+    str_lit.session_state.library_qty_map = {}
+
 
 def refresh_user_cache(user_id):
     """Helper to update cached user metadata after mutations."""
@@ -190,11 +193,8 @@ if str_lit.session_state.user is None:
 else:
     user = str_lit.session_state.user
 
-    # Always keep quantity map fresh when on the Search tab
-    str_lit.session_state.library_qty_map = get_user_card_quantities(user["id"])
-
-    if "sorted_tags" not in str_lit.session_state:
-        str_lit.session_state.sorted_tags = get_user_tags(user["id"])
+    if "sorted_tags" not in str_lit.session_state or "library_qty_map" not in str_lit.session_state:
+        refresh_user_cache(user["id"])
 
     # --- STICKY TOP HEADER CONTAINER ---
     with str_lit.container():
@@ -306,7 +306,7 @@ else:
         has_nonfoil = "nonfoil" in finishes
         has_foil = "foil" in finishes or "etched" in finishes
 
-        # Fetch fresh quantities map directly from state
+        # Read directly from current session state
         qty_map = str_lit.session_state.get("library_qty_map", {})
         owned_dict = qty_map.get(card_id, {"reg": 0, "foil": 0})
         owned_reg = owned_dict.get("reg", 0)
@@ -320,7 +320,6 @@ else:
         with c_info:
             str_lit.markdown(f"**{c_name}** · `{s_name}`")
 
-            # Displays quantity owned in user library
             if owned_reg > 0 or owned_foil > 0:
                 str_lit.markdown(f"📦 In Library: **{owned_reg}x** Reg | **{owned_foil}x** Foil")
             else:

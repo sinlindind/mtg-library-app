@@ -77,8 +77,8 @@ def add_card_to_library(
 
     if existing_entry.data:
         card_record = existing_entry.data[0]
-        new_reg = card_record.get("reg_quantity", 0) + reg_quantity
-        new_foil = card_record.get("foil_quantity", 0) + foil_quantity
+        new_reg = (card_record.get("reg_quantity") or 0) + reg_quantity
+        new_foil = (card_record.get("foil_quantity") or 0) + foil_quantity
 
         response = (
             supabase.table("user_cards")
@@ -198,11 +198,13 @@ def update_card_tags(entry_id: int, tags: list[str]):
 
 def get_user_tags(user_id: str) -> list[str]:
     """Fetches unique tags for a user using Supabase RPC or lightweight query."""
-    response = supabase.rpc("get_distinct_user_tags", {"p_user_id": user_id}).execute()
-    if response.data:
-        return [r["tag"] for r in response.data]
+    try:
+        response = supabase.rpc("get_distinct_user_tags", {"p_user_id": user_id}).execute()
+        if response.data:
+            return [r["tag"] for r in response.data]
+    except Exception:
+        pass
 
-    # Fallback if RPC isn't created: only select the 'tags' column
     res = supabase.table("user_cards").select("tags").eq("user_id", user_id).execute()
     if not res.data:
         return []
@@ -227,10 +229,12 @@ def get_user_card_quantities(user_id: str) -> dict:
     qty_map = {}
     for entry in response.data:
         sid = entry["scryfall_id"]
+        reg = entry.get("reg_quantity") or 0
+        foil = entry.get("foil_quantity") or 0
         if sid not in qty_map:
             qty_map[sid] = {"reg": 0, "foil": 0}
-        qty_map[sid]["reg"] += entry.get("reg_quantity", 0)
-        qty_map[sid]["foil"] += entry.get("foil_quantity", 0)
+        qty_map[sid]["reg"] += reg
+        qty_map[sid]["foil"] += foil
     return qty_map
 
 
@@ -254,7 +258,6 @@ def get_user_library_paginated(
             f"card_name.ilike.%{search_query}%,set_name.ilike.%{search_query}%"
         )
 
-    # Postgres Array Overlap filter (cs = contains)
     if tags:
         query = query.cs("tags", tags)
 
