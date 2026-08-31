@@ -189,6 +189,9 @@ if str_lit.session_state.user is None:
 else:
     user = str_lit.session_state.user
 
+    # Mandatory runtime refresh so quantity counters render immediately on script run
+    refresh_user_cache(user["id"])
+
     # Fetch light cached data into session state if missing
     if "sorted_tags" not in str_lit.session_state:
         str_lit.session_state.sorted_tags = get_user_tags(user["id"])
@@ -298,19 +301,29 @@ else:
         img_url = get_card_image_url(card, size="large") or get_card_image_url(card, size="normal")
         usd = card.get("prices", {}).get("usd") or "N/A"
         usd_foil = card.get("prices", {}).get("usd_foil") or "N/A"
-        card_id = card["id"]
-        c_name = card.get("name")
-        s_name = card.get("set_name")
+        
+        # Lowercase all keys for reliable dict lookup
+        card_id = str(card.get("id", "")).strip().lower()
+        oracle_id = str(card.get("oracle_id", "")).strip().lower()
+        c_name = str(card.get("name", "")).strip().lower()
 
         finishes = card.get("finishes", [])
         has_nonfoil = "nonfoil" in finishes
         has_foil = "foil" in finishes or "etched" in finishes
 
-        # Read directly from session state cache to avoid stale values
         qty_map = str_lit.session_state.get("library_qty_map", {})
-        owned_dict = qty_map.get(card_id, {"reg": 0, "foil": 0})
+        
+        # Resolution order: Exact Printing ID -> Oracle ID -> Card Name -> Fallback Default
+        owned_dict = (
+            qty_map.get(card_id)
+            or qty_map.get(oracle_id)
+            or qty_map.get(c_name)
+            or {"reg": 0, "foil": 0}
+        )
+        
         owned_reg = owned_dict.get("reg", 0)
         owned_foil = owned_dict.get("foil", 0)
+        total_owned = owned_reg + owned_foil
         str_lit.session_state.card_cache[card_id] = card
 
         with c_preview:

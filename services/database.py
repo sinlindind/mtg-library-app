@@ -274,23 +274,38 @@ def get_user_tags(user_id: str) -> list[str]:
 
 
 def get_user_card_quantities(user_id: str) -> dict:
-    """Only fetches scryfall_id, reg_quantity, and foil_quantity (minimal payload)."""
     response = (
         supabase.table("user_cards")
-        .select("scryfall_id, reg_quantity, foil_quantity")
+        .select("scryfall_id, card_name, reg_quantity, foil_quantity")
         .eq("user_id", user_id)
         .execute()
     )
     if not response.data:
         return {}
-    
+
     qty_map = {}
     for entry in response.data:
-        sid = entry["scryfall_id"]
-        if sid not in qty_map:
-            qty_map[sid] = {"reg": 0, "foil": 0}
-        qty_map[sid]["reg"] += entry.get("reg_quantity", 0)
-        qty_map[sid]["foil"] += entry.get("foil_quantity", 0)
+        sid = entry.get("scryfall_id")
+        cname = entry.get("card_name")
+        reg = entry.get("reg_quantity") or 0
+        foil = entry.get("foil_quantity") or 0
+
+        # Primary key: Normalized Scryfall UUID
+        if sid:
+            sid_key = str(sid).strip().lower()
+            if sid_key not in qty_map:
+                qty_map[sid_key] = {"reg": 0, "foil": 0}
+            qty_map[sid_key]["reg"] += reg
+            qty_map[sid_key]["foil"] += foil
+
+        # Fallback key: Normalized Card Name (handles matching across printings)
+        if cname:
+            cname_key = str(cname).strip().lower()
+            if cname_key not in qty_map:
+                qty_map[cname_key] = {"reg": 0, "foil": 0}
+            qty_map[cname_key]["reg"] += reg
+            qty_map[cname_key]["foil"] += foil
+
     return qty_map
 
 
