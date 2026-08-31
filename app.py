@@ -190,12 +190,11 @@ if str_lit.session_state.user is None:
 else:
     user = str_lit.session_state.user
 
-    # Fetch light cached data into session state if missing
+    # Always keep quantity map fresh when on the Search tab
+    str_lit.session_state.library_qty_map = get_user_card_quantities(user["id"])
+
     if "sorted_tags" not in str_lit.session_state:
         str_lit.session_state.sorted_tags = get_user_tags(user["id"])
-
-    if "library_qty_map" not in str_lit.session_state:
-        str_lit.session_state.library_qty_map = get_user_card_quantities(user["id"])
 
     # --- STICKY TOP HEADER CONTAINER ---
     with str_lit.container():
@@ -307,7 +306,7 @@ else:
         has_nonfoil = "nonfoil" in finishes
         has_foil = "foil" in finishes or "etched" in finishes
 
-        # Read directly from session state cache to avoid stale values
+        # Fetch fresh quantities map directly from state
         qty_map = str_lit.session_state.get("library_qty_map", {})
         owned_dict = qty_map.get(card_id, {"reg": 0, "foil": 0})
         owned_reg = owned_dict.get("reg", 0)
