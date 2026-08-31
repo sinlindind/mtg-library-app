@@ -480,6 +480,7 @@ else:
 
     # --- MAIN VIEW EXECUTION ---
     if current_tab == "🔍 Search":
+        str_lit.write("DEBUG - Library Qty Map Contents:", str_lit.session_state.get("library_qty_map"))
         if search_query:
             results = search_cards(search_query)
 
