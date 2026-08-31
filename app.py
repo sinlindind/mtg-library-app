@@ -193,7 +193,7 @@ if str_lit.session_state.user is None:
 else:
     user = str_lit.session_state.user
 
-    # Always fetch latest user cache to ensure quantity displays stay in sync
+    # Mandatory runtime state refresh so search counters render immediately
     refresh_user_cache(user["id"])
 
     # --- STICKY TOP HEADER CONTAINER ---

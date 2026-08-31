@@ -239,7 +239,7 @@ def get_user_card_quantities(user_id: str) -> dict:
             qty_map[sid_key]["reg"] += reg
             qty_map[sid_key]["foil"] += foil
 
-        # Store quantity mapped by lower-cased card_name as fallback
+        # Store quantity mapped by normalized card name as fallback
         if cname:
             cname_key = str(cname).strip().lower()
             if cname_key not in qty_map:
